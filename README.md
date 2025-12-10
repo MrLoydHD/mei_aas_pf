@@ -1,94 +1,288 @@
-# Project Title (e.g., Passive Malware Detection using Byte N-Grams)
+# DGA Detection System
 
 ![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)
-![Python](https://img.shields.io/badge/Python-3.12%2B-blue)
+![Python](https://img.shields.io/badge/Python-3.8%2B-blue)
+![React](https://img.shields.io/badge/React-18-61dafb)
+![FastAPI](https://img.shields.io/badge/FastAPI-0.109-009688)
 
 ## Introduction
 
-This repository contains the source code for the Practical Project of the **Aprendizagem Aplicada à Segurança (AAS)** course.
+This repository contains a full-stack **Domain Generation Algorithm (DGA) Detection System** developed for the **Aprendizagem Aplicada à Segurança (AAS)** course.
 
-The objective of this project is to [briefly describe goal, e.g., classify portable executable (PE) files as benign or malicious] using [briefly describe technique, e.g., Random Forest classifiers based on header metadata].
+The system detects domains generated algorithmically by botnets and command-and-control (C2) servers, distinguishing between legitimate domain names and random/algorithmic ones using machine learning.
+
+**Features:**
+- Two ML models: Random Forest (interpretable) and LSTM (deep learning)
+- FastAPI REST backend for real-time predictions
+- React dashboard for visualization and analysis
+- Chrome browser extension for real-time protection
 
 **Authors:**
-* Student Name 1 (nMec)
-* Student Name 2 (nMec)
+* Hugo Correia
 
-## Prerequisities
+## Architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                   Chrome Extension                           │
+│  - Real-time URL monitoring                                 │
+│  - Visual warnings for DGA domains                          │
+│  - Statistics tracking                                      │
+└──────────────────────────┬──────────────────────────────────┘
+                           │ HTTP/REST
+                           ▼
+┌─────────────────────────────────────────────────────────────┐
+│                   React Dashboard                            │
+│  - Detection statistics & charts                            │
+│  - Domain scanner interface                                 │
+│  - Model performance metrics                                │
+└──────────────────────────┬──────────────────────────────────┘
+                           │
+                           ▼
+┌─────────────────────────────────────────────────────────────┐
+│                   FastAPI Backend                            │
+│  - /predict - Single domain classification                  │
+│  - /predict/batch - Batch classification                    │
+│  - /stats - Detection statistics                            │
+│  - /models - Model information                              │
+└──────────────────────────┬──────────────────────────────────┘
+                           │
+                           ▼
+┌─────────────────────────────────────────────────────────────┐
+│                   ML Models                                  │
+│  - Random Forest: Handcrafted features                      │
+│  - CNN-LSTM: Character-level deep learning                  │
+└─────────────────────────────────────────────────────────────┘
+```
+
+## Prerequisites
 
 * Python 3.8 or higher
-* Pip (Python Package Installer)
+* Node.js 18+ (for React dashboard)
+* Chrome/Chromium browser (for extension)
 
 ## Installation
 
-It is strongly recommended to run this project inside a virtual environment to avoid dependency conflicts.
+### 1. Clone and Setup
 
-### 1. Extract the compressed file
 ```bash
-tar xvf [compressed_file].tar.xz 
-cd [your-project]
-````
+git clone https://github.com/MrLoydHD/mei_aas_pf.git
+cd mei_aas_pf
+```
 
-### 2. Create and Activate Virtual Environment
-
-**Linux / macOS:**
+### 2. Create Virtual Environment
 
 ```bash
 python3 -m venv venv
-source venv/bin/activate
+source venv/bin/activate  # Linux/macOS
+# or
+.\venv\Scripts\Activate   # Windows
 ```
 
-**Windows (PowerShell):**
-
-```powershell
-python -m venv venv
-.\venv\Scripts\Activate
-```
-
-### 3. Install Dependencies
+### 3. Install Python Dependencies
 
 ```bash
 pip install -r requirements.txt
 ```
 
+### 4. Install Frontend Dependencies
+
+```bash
+cd frontend
+npm install
+cd ..
+```
+
 ## Dataset
 
-This project utilizes the [Name of Dataset] dataset.
+The project uses a balanced DGA detection dataset located in the `archive/` folder:
 
-  * **Source:** [Link to dataset]
-  * **Setup:** Place the dataset files in the `data/` folder. If the dataset is large, run the provided script to download it:
-    ```bash
-    python scripts/download_data.py
-    ```
+| File | Records | Description |
+|------|---------|-------------|
+| `dga_websites.csv` | 337,500 | DGA-generated domains |
+| `legit_websites.csv` | 337,398 | Legitimate domains |
+| `words.txt` | 354,986 | English dictionary for feature extraction |
 
 ## Usage
 
-To train the model:
+### Step 1: Train the Models
 
 ```bash
-python src/train.py --input data/train.csv --output models/rf_model.pkl
+# Train both Random Forest and LSTM models
+python -m src.ml.train
+
+# Train with smaller sample (faster, for testing)
+python -m src.ml.train --sample-size 50000
+
+# Train only Random Forest
+python -m src.ml.train --rf-only
+
+# Train only LSTM
+python -m src.ml.train --lstm-only --epochs 30
 ```
 
-To run the classification on a new file:
+Training outputs:
+- `models/random_forest.joblib` - Trained RF model
+- `models/lstm/` - Trained LSTM model
+- `models/plots/` - Confusion matrices, feature importance, training curves
+- `models/results_summary.json` - Performance metrics
+
+### Step 2: Start the Backend API
 
 ```bash
-python src/main.py --target suspicious_file.exe --model models/rf_model.pkl
+# Start FastAPI server
+python -m src.api.main
+
+# Or with uvicorn directly
+uvicorn src.api.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-## Major Results
+API will be available at:
+- http://localhost:8000 - API root
+- http://localhost:8000/docs - Swagger UI
+- http://localhost:8000/redoc - ReDoc documentation
 
-The following table summarizes the performance of our best model ([Model Name]) on the test set (20% split).
+### Step 3: Start the React Dashboard
 
-| Class | Precision | Recall | F1-Score | Support |
-| :--- | :---: | :---: | :---: | :---: |
-| **Benign** | 0.98 | 0.97 | 0.97 | 1050 |
-| **Malicious** | 0.96 | 0.99 | 0.97 | 980 |
-| **Accuracy** | | | **0.97** | 2030 |
+```bash
+cd frontend
+npm run dev
+```
 
-**Key Findings:**
+Dashboard available at http://localhost:3000
 
-  * The model achieved a low False Negative Rate (FNR), which is critical for security applications.
-  * Feature extraction overhead was approximately 15ms per file.
+### Step 4: Install Chrome Extension
+
+1. Open Chrome and navigate to `chrome://extensions/`
+2. Enable "Developer mode" (top right)
+3. Click "Load unpacked"
+4. Select the `extension/` folder
+5. The DGA Detector icon will appear in your toolbar
+
+**Note:** You need to generate PNG icons from the SVG files in `extension/icons/`. You can:
+- Use an online SVG to PNG converter
+- Or open `extension/icons/generate_icons.html` in a browser and save the canvases
+
+## API Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/health` | GET | Health check |
+| `/predict` | POST | Classify single domain |
+| `/predict/batch` | POST | Classify multiple domains |
+| `/predict/detailed` | POST | Classify with feature analysis |
+| `/stats` | GET | Detection statistics |
+| `/models` | GET | Model information |
+| `/extension/check` | POST | Lightweight endpoint for extension |
+
+### Example API Usage
+
+```bash
+# Single domain prediction
+curl -X POST "http://localhost:8000/predict" \
+  -H "Content-Type: application/json" \
+  -d '{"domain": "suspicious123abc.net"}'
+
+# Batch prediction
+curl -X POST "http://localhost:8000/predict/batch" \
+  -H "Content-Type: application/json" \
+  -d '{"domains": ["google.com", "xk23jf9sd.net", "facebook.com"]}'
+```
+
+## Model Comparison
+
+### Random Forest
+
+**Approach:** Handcrafted features including:
+- Domain length, entropy, character distribution
+- N-gram analysis (bigrams, trigrams)
+- Dictionary word presence
+- Vowel/consonant ratios
+
+**Pros:**
+- Fast inference (~1ms per domain)
+- Interpretable features
+- No GPU required
+
+### LSTM (CNN-LSTM Hybrid)
+
+**Approach:** Character-level deep learning:
+- Character embeddings
+- 1D CNN for local pattern detection
+- Bidirectional LSTM for sequential patterns
+
+**Pros:**
+- Learns features automatically
+- Better at capturing complex patterns
+- Higher accuracy potential
+
+## Project Structure
+
+```
+mei_aas_pf/
+├── archive/                 # Dataset files
+│   ├── dga_websites.csv
+│   ├── legit_websites.csv
+│   └── words.txt
+├── src/
+│   ├── ml/                  # Machine learning module
+│   │   ├── features.py      # Feature extraction
+│   │   ├── random_forest_model.py
+│   │   ├── lstm_model.py
+│   │   └── train.py         # Training script
+│   ├── api/                 # FastAPI backend
+│   │   ├── main.py          # API endpoints
+│   │   ├── models.py        # Pydantic schemas
+│   │   └── database.py      # SQLite logging
+│   └── utils/               # Utility functions
+├── models/                  # Trained models
+├── frontend/                # React dashboard
+│   ├── src/
+│   │   ├── pages/           # Dashboard, Scanner, Models
+│   │   ├── services/        # API client
+│   │   └── types/           # TypeScript types
+│   └── package.json
+├── extension/               # Chrome extension
+│   ├── manifest.json
+│   ├── background.js        # Service worker
+│   ├── content.js           # Warning overlay
+│   ├── popup.html/js        # Extension popup
+│   └── icons/               # Extension icons
+├── tests/                   # Unit tests
+├── requirements.txt         # Python dependencies
+└── README.md
+```
+
+## Results
+
+Performance metrics will be populated after training. Expected results:
+
+| Model | Accuracy | Precision | Recall | F1-Score | ROC-AUC |
+|-------|----------|-----------|--------|----------|---------|
+| Random Forest | ~95% | ~95% | ~95% | ~95% | ~98% |
+| CNN-LSTM | ~97% | ~97% | ~97% | ~97% | ~99% |
+
+## Security Considerations
+
+- This tool is for **educational and defensive purposes only**
+- The extension monitors URLs locally; no data is sent to external servers
+- API runs on localhost by default
+- For production deployment, add proper authentication and HTTPS
+
+## Future Work
+
+- [ ] Add more DGA family-specific detection
+- [ ] Implement online learning for new threats
+- [ ] Add DNS query monitoring
+- [ ] Support for Firefox extension
+- [ ] Containerize with Docker
 
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## References
+
+- [DGA Detection with Machine Learning](https://www.endgame.com/blog/technical-blog/using-deep-learning-detect-dgas)
+- [Character-level CNNs for DGA Detection](https://arxiv.org/abs/1611.00791)
+- Woodbridge et al., "Predicting Domain Generation Algorithms with Long Short-Term Memory Networks"
