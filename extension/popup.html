@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DGA Detector</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      width: 350px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #f8fafc;
+    }
+
+    .header {
+      background: linear-gradient(135deg, #0ea5e9 0%, #0369a1 100%);
+      color: white;
+      padding: 20px;
+      text-align: center;
+    }
+
+    .header h1 {
+      font-size: 18px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+
+    .header p {
+      font-size: 12px;
+      opacity: 0.9;
+      margin-top: 4px;
+    }
+
+    .content {
+      padding: 16px;
+    }
+
+    .current-domain {
+      background: white;
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 16px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+
+    .current-domain h3 {
+      font-size: 12px;
+      color: #64748b;
+      margin-bottom: 8px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .domain-name {
+      font-size: 16px;
+      font-weight: 600;
+      color: #1e293b;
+      word-break: break-all;
+    }
+
+    .status {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 12px;
+      padding: 12px;
+      border-radius: 8px;
+    }
+
+    .status.safe {
+      background: #f0fdf4;
+      color: #166534;
+    }
+
+    .status.danger {
+      background: #fef2f2;
+      color: #991b1b;
+    }
+
+    .status.warning {
+      background: #fffbeb;
+      color: #92400e;
+    }
+
+    .status.checking {
+      background: #f1f5f9;
+      color: #475569;
+    }
+
+    .status-icon {
+      width: 24px;
+      height: 24px;
+      flex-shrink: 0;
+    }
+
+    .status-text {
+      flex: 1;
+    }
+
+    .status-text strong {
+      display: block;
+      font-size: 14px;
+    }
+
+    .status-text span {
+      font-size: 12px;
+      opacity: 0.8;
+    }
+
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+
+    .stat-card {
+      background: white;
+      border-radius: 8px;
+      padding: 12px;
+      text-align: center;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+
+    .stat-value {
+      font-size: 20px;
+      font-weight: 700;
+      color: #1e293b;
+    }
+
+    .stat-label {
+      font-size: 10px;
+      color: #64748b;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .stat-value.danger { color: #dc2626; }
+    .stat-value.success { color: #16a34a; }
+    .stat-value.primary { color: #0ea5e9; }
+
+    .manual-check {
+      background: white;
+      border-radius: 12px;
+      padding: 16px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+
+    .manual-check h3 {
+      font-size: 12px;
+      color: #64748b;
+      margin-bottom: 8px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .input-group {
+      display: flex;
+      gap: 8px;
+    }
+
+    .input-group input {
+      flex: 1;
+      padding: 10px 12px;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      font-size: 14px;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    .input-group input:focus {
+      border-color: #0ea5e9;
+    }
+
+    .input-group button {
+      background: #0ea5e9;
+      color: white;
+      border: none;
+      padding: 10px 16px;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    .input-group button:hover {
+      background: #0284c7;
+    }
+
+    .input-group button:disabled {
+      background: #94a3b8;
+      cursor: not-allowed;
+    }
+
+    .footer {
+      padding: 12px 16px;
+      text-align: center;
+      border-top: 1px solid #e2e8f0;
+    }
+
+    .footer a {
+      color: #0ea5e9;
+      text-decoration: none;
+      font-size: 12px;
+    }
+
+    .footer a:hover {
+      text-decoration: underline;
+    }
+
+    .spinner {
+      width: 20px;
+      height: 20px;
+      border: 2px solid #e2e8f0;
+      border-top-color: #0ea5e9;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .hidden {
+      display: none !important;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+      </svg>
+      DGA Detector
+    </h1>
+    <p>Real-time domain threat detection</p>
+  </div>
+
+  <div class="content">
+    <!-- Current Domain Status -->
+    <div class="current-domain">
+      <h3>Current Page</h3>
+      <div id="domain-display" class="domain-name">Loading...</div>
+      <div id="status-container">
+        <div id="status-checking" class="status checking">
+          <div class="spinner"></div>
+          <div class="status-text">
+            <strong>Checking...</strong>
+            <span>Analyzing domain</span>
+          </div>
+        </div>
+        <div id="status-safe" class="status safe hidden">
+          <svg class="status-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+            <polyline points="22 4 12 14.01 9 11.01"/>
+          </svg>
+          <div class="status-text">
+            <strong>Safe Domain</strong>
+            <span id="safe-confidence">Confidence: --</span>
+          </div>
+        </div>
+        <div id="status-danger" class="status danger hidden">
+          <svg class="status-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+            <line x1="12" y1="9" x2="12" y2="13"/>
+            <line x1="12" y1="17" x2="12.01" y2="17"/>
+          </svg>
+          <div class="status-text">
+            <strong>DGA Detected!</strong>
+            <span id="danger-confidence">Confidence: --</span>
+          </div>
+        </div>
+        <div id="status-na" class="status warning hidden">
+          <svg class="status-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"/>
+            <line x1="12" y1="8" x2="12" y2="12"/>
+            <line x1="12" y1="16" x2="12.01" y2="16"/>
+          </svg>
+          <div class="status-text">
+            <strong>Not Applicable</strong>
+            <span>Internal or trusted page</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Statistics -->
+    <div class="stats">
+      <div class="stat-card">
+        <div id="stat-total" class="stat-value primary">0</div>
+        <div class="stat-label">Checked</div>
+      </div>
+      <div class="stat-card">
+        <div id="stat-dga" class="stat-value danger">0</div>
+        <div class="stat-label">DGA Found</div>
+      </div>
+      <div class="stat-card">
+        <div id="stat-safe" class="stat-value success">0</div>
+        <div class="stat-label">Safe</div>
+      </div>
+    </div>
+
+    <!-- Manual Check -->
+    <div class="manual-check">
+      <h3>Manual Check</h3>
+      <div class="input-group">
+        <input type="text" id="manual-domain" placeholder="Enter domain to check">
+        <button id="check-btn">Check</button>
+      </div>
+      <div id="manual-result" class="hidden" style="margin-top: 12px;"></div>
+    </div>
+  </div>
+
+  <div class="footer">
+    <a href="http://localhost:3000" target="_blank">Open Dashboard</a>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
