@@ -6,6 +6,7 @@ Provides REST endpoints for domain classification and statistics.
 import os
 import sys
 import time
+from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
@@ -26,34 +27,18 @@ from src.api.database import init_db, get_db, DetectionRepository
 from src.ml.random_forest_model import RandomForestDGADetector
 from src.ml.lstm_model import LSTMDGADetector
 
-# Initialize app
-app = FastAPI(
-    title="DGA Detection API",
-    description="API for detecting Domain Generation Algorithm (DGA) generated domains",
-    version="1.0.0",
-    docs_url="/docs",
-    redoc_url="/redoc"
-)
-
-# CORS middleware for browser extension and frontend
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  # In production, restrict this
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
 # Global state
 startup_time = time.time()
 rf_model: Optional[RandomForestDGADetector] = None
 lstm_model: Optional[LSTMDGADetector] = None
 
 
-@app.on_event("startup")
-async def startup_event():
+@asynccontextmanager
+async def lifespan(app: FastAPI):
     """Initialize database and load models on startup."""
-    global rf_model, lstm_model
+    global rf_model, lstm_model, startup_time
+
+    startup_time = time.time()
 
     print("Initializing database...")
     init_db()
@@ -82,6 +67,31 @@ async def startup_event():
 
     if not rf_model and not lstm_model:
         print("WARNING: No models loaded. Please train models first.")
+
+    yield  # App runs here
+
+    # Cleanup on shutdown (if needed)
+    print("Shutting down...")
+
+
+# Initialize app with lifespan
+app = FastAPI(
+    title="DGA Detection API",
+    description="API for detecting Domain Generation Algorithm (DGA) generated domains",
+    version="1.0.0",
+    docs_url="/docs",
+    redoc_url="/redoc",
+    lifespan=lifespan
+)
+
+# CORS middleware for browser extension and frontend
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # In production, restrict this
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 def get_active_model(model_type: str = "auto"):

@@ -73,6 +73,13 @@ class DetectionLog(BaseModel):
     timestamp: datetime
 
 
+class HourlyStatEntry(BaseModel):
+    """Model for hourly statistics entry."""
+    total: int
+    dga: int
+    legit: int
+
+
 class StatsResponse(BaseModel):
     """Response model for detection statistics."""
     total_scans: int
@@ -81,7 +88,7 @@ class StatsResponse(BaseModel):
     detection_rate: float
     top_dga_domains: List[Dict[str, Any]]
     recent_detections: List[DetectionLog]
-    hourly_stats: Dict[str, int]
+    hourly_stats: Dict[str, HourlyStatEntry]
 
 
 class ModelInfoResponse(BaseModel):
