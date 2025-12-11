@@ -1,9 +1,10 @@
 # DGA Detection System
 
 ![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)
-![Python](https://img.shields.io/badge/Python-3.8%2B-blue)
-![React](https://img.shields.io/badge/React-18-61dafb)
-![FastAPI](https://img.shields.io/badge/FastAPI-0.109-009688)
+![Python](https://img.shields.io/badge/Python-3.12-blue)
+![React](https://img.shields.io/badge/React-18.2-61dafb)
+![FastAPI](https://img.shields.io/badge/FastAPI-0.123-009688)
+![Docker](https://img.shields.io/badge/Docker-Ready-2496ED)
 
 ## Introduction
 
@@ -57,9 +58,10 @@ The system detects domains generated algorithmically by botnets and command-and-
 
 ## Prerequisites
 
-* Python 3.8 or higher
+* Python 3.12 or higher
 * Node.js 18+ (for React dashboard)
 * Chrome/Chromium browser (for extension)
+* Docker & Docker Compose (optional, for containerized deployment)
 
 ## Installation
 
@@ -93,9 +95,41 @@ npm install
 cd ..
 ```
 
+## Docker Deployment
+
+For containerized deployment, use Docker Compose:
+
+```bash
+# First time: train the models
+make train
+
+# Build and start all services
+make start
+
+# Or manually:
+docker-compose build
+docker-compose up -d
+```
+
+**Available Commands:**
+
+| Command | Description |
+|---------|-------------|
+| `make build` | Build all Docker images |
+| `make up` | Start all services |
+| `make down` | Stop all services |
+| `make logs` | View logs from all services |
+| `make train` | Train ML models |
+| `make clean` | Remove all containers and images |
+
+**Services:**
+- **Frontend**: http://localhost:3000
+- **Backend API**: http://localhost:8000
+- **API Docs**: http://localhost:8000/docs
+
 ## Dataset
 
-The project uses a balanced DGA detection dataset located in the `archive/` folder:
+The project uses a balanced DGA detection dataset located in the `data/raw/` folder:
 
 | File | Records | Description |
 |------|---------|-------------|
@@ -220,10 +254,11 @@ curl -X POST "http://localhost:8000/predict/batch" \
 
 ```
 mei_aas_pf/
-├── archive/                 # Dataset files
-│   ├── dga_websites.csv
-│   ├── legit_websites.csv
-│   └── words.txt
+├── data/                    # Dataset files
+│   └── raw/
+│       ├── dga_websites.csv
+│       ├── legit_websites.csv
+│       └── words.txt
 ├── src/
 │   ├── ml/                  # Machine learning module
 │   │   ├── features.py      # Feature extraction
@@ -235,10 +270,14 @@ mei_aas_pf/
 │   │   ├── models.py        # Pydantic schemas
 │   │   └── database.py      # SQLite logging
 │   └── utils/               # Utility functions
-├── models/                  # Trained models
+├── models/                  # Trained models (generated)
 ├── frontend/                # React dashboard
 │   ├── src/
-│   │   ├── pages/           # Dashboard, Scanner, Models
+│   │   ├── components/ui/   # shadcn/ui components
+│   │   ├── pages/
+│   │   │   ├── Dashboard/   # Dashboard page & components
+│   │   │   ├── Scanner/     # Scanner page & components
+│   │   │   └── Models/      # Models page & components
 │   │   ├── services/        # API client
 │   │   └── types/           # TypeScript types
 │   └── package.json
@@ -248,19 +287,25 @@ mei_aas_pf/
 │   ├── content.js           # Warning overlay
 │   ├── popup.html/js        # Extension popup
 │   └── icons/               # Extension icons
-├── tests/                   # Unit tests
+├── Dockerfile.backend       # Backend Docker image
+├── Dockerfile.frontend      # Frontend Docker image
+├── docker-compose.yml       # Docker orchestration
+├── nginx.conf               # Nginx configuration
+├── Makefile                 # Build commands
 ├── requirements.txt         # Python dependencies
 └── README.md
 ```
 
 ## Results
 
-Performance metrics will be populated after training. Expected results:
+Performance metrics from training on the full dataset:
 
 | Model | Accuracy | Precision | Recall | F1-Score | ROC-AUC |
 |-------|----------|-----------|--------|----------|---------|
-| Random Forest | ~95% | ~95% | ~95% | ~95% | ~98% |
-| CNN-LSTM | ~97% | ~97% | ~97% | ~97% | ~99% |
+| Random Forest | 89.34% | 92.91% | 85.18% | 88.88% | 95.89% |
+| CNN-LSTM | **95.88%** | **96.20%** | **95.53%** | **95.86%** | **99.27%** |
+
+The CNN-LSTM model outperforms Random Forest across all metrics, achieving nearly 96% accuracy and 99% ROC-AUC.
 
 ## Security Considerations
 
@@ -275,7 +320,7 @@ Performance metrics will be populated after training. Expected results:
 - [ ] Implement online learning for new threats
 - [ ] Add DNS query monitoring
 - [ ] Support for Firefox extension
-- [ ] Containerize with Docker
+- [x] Containerize with Docker
 
 ## License
 
