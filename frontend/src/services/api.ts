@@ -8,7 +8,10 @@ import type {
   HealthStatus
 } from '../types';
 
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+// In production (Docker), use /api which nginx proxies to backend
+// In development, use localhost:8000 directly or via Vite proxy
+const API_BASE = import.meta.env.VITE_API_URL ||
+  (import.meta.env.PROD ? '/api' : 'http://localhost:8000');
 
 const api = axios.create({
   baseURL: API_BASE,
