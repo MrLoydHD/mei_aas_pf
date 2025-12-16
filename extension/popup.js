@@ -16,6 +16,72 @@ document.addEventListener('DOMContentLoaded', async () => {
   const checkBtn = document.getElementById('check-btn');
   const manualResult = document.getElementById('manual-result');
 
+  // Auth elements
+  const signInBtn = document.getElementById('sign-in-btn');
+  const signOutBtn = document.getElementById('sign-out-btn');
+  const userInfo = document.getElementById('user-info');
+  const userAvatar = document.getElementById('user-avatar');
+  const syncStatus = document.getElementById('sync-status');
+
+  // Update auth UI
+  function updateAuthUI(isSignedIn, user) {
+    if (isSignedIn && user) {
+      signInBtn.classList.add('hidden');
+      userInfo.classList.remove('hidden');
+      syncStatus.classList.remove('hidden');
+      if (user.picture) {
+        userAvatar.src = user.picture;
+      } else {
+        userAvatar.src = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%23fff"><circle cx="12" cy="8" r="4"/><path d="M12 14c-6 0-9 3-9 6v2h18v-2c0-3-3-6-9-6z"/></svg>';
+      }
+    } else {
+      signInBtn.classList.remove('hidden');
+      userInfo.classList.add('hidden');
+      syncStatus.classList.add('hidden');
+    }
+  }
+
+  // Check auth status on load
+  chrome.runtime.sendMessage({ type: 'GET_AUTH_STATUS' }, (response) => {
+    if (response) {
+      updateAuthUI(response.isSignedIn, response.user);
+    }
+  });
+
+  // Sign in handler
+  signInBtn.addEventListener('click', async () => {
+    signInBtn.disabled = true;
+    signInBtn.textContent = '...';
+
+    chrome.runtime.sendMessage({ type: 'SIGN_IN' }, (response) => {
+      signInBtn.disabled = false;
+      signInBtn.textContent = 'Sign In';
+
+      if (response && response.success) {
+        updateAuthUI(true, response.user);
+        // Refresh stats after sign in
+        chrome.runtime.sendMessage({ type: 'GET_STATS' }, (stats) => {
+          if (stats) {
+            updateStats(stats);
+          }
+        });
+      } else {
+        console.error('Sign in failed:', response?.error);
+        // Show error to user
+        alert('Sign in failed: ' + (response?.error || 'Unknown error'));
+      }
+    });
+  });
+
+  // Sign out handler
+  signOutBtn.addEventListener('click', async () => {
+    chrome.runtime.sendMessage({ type: 'SIGN_OUT' }, (response) => {
+      if (response && response.success) {
+        updateAuthUI(false, null);
+      }
+    });
+  });
+
   // Hide all status indicators
   function hideAllStatus() {
     statusChecking.classList.add('hidden');
