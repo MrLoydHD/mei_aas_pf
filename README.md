@@ -197,6 +197,34 @@ Dashboard available at http://localhost:3000
 - Use an online SVG to PNG converter
 - Or open `extension/icons/generate_icons.html` in a browser and save the canvases
 
+### Step 5: Configure Google OAuth (Optional)
+
+For syncing detection data between the dashboard and extension:
+
+1. Go to [Google Cloud Console](https://console.cloud.google.com/)
+2. Create a new project or select existing
+3. Enable the Google+ API
+4. Go to Credentials → Create Credentials → OAuth 2.0 Client ID
+5. Create **two** OAuth clients:
+
+   **Web Application** (for dashboard):
+   - Authorized JavaScript origins: `http://localhost:3000`
+   - Authorized redirect URIs: `http://localhost:3000`
+
+   **Chrome Extension** (for browser extension):
+   - Application type: Chrome Extension
+   - Item ID: Your extension ID (found in `chrome://extensions`)
+
+6. Copy the environment files and add your client IDs:
+   ```bash
+   cp .env.example .env
+   cp frontend/.env.example frontend/.env
+   ```
+
+7. Update `extension/manifest.json`:
+   - Replace `YOUR_CHROME_EXTENSION_CLIENT_ID` with your Chrome extension OAuth client ID
+   - Replace `YOUR_EXTENSION_PUBLIC_KEY` with your extension's public key
+
 ## API Endpoints
 
 | Endpoint | Method | Description |
@@ -208,6 +236,10 @@ Dashboard available at http://localhost:3000
 | `/stats` | GET | Detection statistics |
 | `/models` | GET | Model information |
 | `/extension/check` | POST | Lightweight endpoint for extension |
+| `/auth/google` | POST | Google OAuth authentication |
+| `/auth/me` | GET | Get current user info |
+| `/auth/stats` | GET | Get user's detection stats |
+| `/auth/sync` | POST | Sync extension stats to server |
 
 ### Example API Usage
 
@@ -321,6 +353,7 @@ The CNN-LSTM model outperforms Random Forest across all metrics, achieving nearl
 - [ ] Add DNS query monitoring
 - [ ] Support for Firefox extension
 - [x] Containerize with Docker
+- [x] Add Google OAuth for dashboard/extension sync
 
 ## License
 

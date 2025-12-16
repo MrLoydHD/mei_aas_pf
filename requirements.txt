@@ -19,6 +19,10 @@ python-multipart>=0.0.20
 # CORS and Security
 python-jose[cryptography]>=3.5.0
 
+# Google OAuth
+google-auth>=2.37.0
+google-auth-oauthlib>=1.2.0
+
 # Database (for logging detections)
 sqlalchemy>=2.0.45
 aiosqlite>=0.21.0
