@@ -47,17 +47,36 @@ export interface Stats {
   }>;
 }
 
+export interface ClassificationReportEntry {
+  precision: number;
+  recall: number;
+  'f1-score': number;
+  support: number;
+}
+
+export interface ModelMetrics {
+  accuracy: number;
+  precision: number;
+  recall: number;
+  f1: number;
+  roc_auc: number;
+  confusion_matrix?: number[][];
+  classification_report?: Record<string, ClassificationReportEntry>;
+  history?: {
+    loss: number[];
+    val_loss: number[];
+    accuracy: number[];
+    val_accuracy: number[];
+    auc?: number[];
+    val_auc?: number[];
+  };
+}
+
 export interface ModelInfo {
   model_name: string;
   model_type: string;
   is_loaded: boolean;
-  metrics: {
-    accuracy: number;
-    precision: number;
-    recall: number;
-    f1: number;
-    roc_auc: number;
-  } | null;
+  metrics: ModelMetrics | null;
   feature_importance: Record<string, number> | null;
 }
 
