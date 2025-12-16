@@ -4,12 +4,12 @@ Uses SQLite with SQLAlchemy for simplicity.
 """
 
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, List
 
-from sqlalchemy import create_engine, Column, Integer, String, Float, Boolean, DateTime
+from sqlalchemy import create_engine, Column, Integer, String, Float, Boolean, DateTime, ForeignKey
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker, Session
+from sqlalchemy.orm import sessionmaker, Session, relationship
 
 # Database URL - use SQLite for simplicity
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./data/dga_detection.db")
@@ -27,6 +27,22 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
 
+class User(Base):
+    """Database model for users."""
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True, index=True)
+    google_id = Column(String(255), unique=True, index=True, nullable=False)
+    email = Column(String(255), unique=True, index=True, nullable=False)
+    name = Column(String(255), nullable=True)
+    picture = Column(String(500), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    last_login = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationship to detections
+    detections = relationship("DetectionRecord", back_populates="user")
+
+
 class DetectionRecord(Base):
     """Database model for detection logs."""
     __tablename__ = "detections"
@@ -41,6 +57,10 @@ class DetectionRecord(Base):
     user_agent = Column(String(500), nullable=True)
     ip_address = Column(String(45), nullable=True)
     timestamp = Column(DateTime, default=datetime.utcnow, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
+
+    # Relationship to user
+    user = relationship("User", back_populates="detections")
 
 
 def init_db():
@@ -74,7 +94,8 @@ class DetectionRepository:
         model_used: str,
         source: Optional[str] = None,
         user_agent: Optional[str] = None,
-        ip_address: Optional[str] = None
+        ip_address: Optional[str] = None,
+        user_id: Optional[int] = None
     ) -> DetectionRecord:
         """Create a new detection record."""
         record = DetectionRecord(
@@ -85,7 +106,8 @@ class DetectionRepository:
             model_used=model_used,
             source=source,
             user_agent=user_agent,
-            ip_address=ip_address
+            ip_address=ip_address,
+            user_id=user_id
         )
         self.db.add(record)
         self.db.commit()
@@ -151,7 +173,7 @@ class DetectionRepository:
         from sqlalchemy import func
         from datetime import timedelta
 
-        cutoff = datetime.utcnow() - timedelta(hours=hours)
+        cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
 
         results = self.db.query(
             func.strftime('%Y-%m-%d %H:00', DetectionRecord.timestamp).label('hour'),
@@ -170,3 +192,91 @@ class DetectionRepository:
             }
             for r in results
         }
+
+    def get_user_stats(self, user_id: int) -> dict:
+        """Get detection statistics for a specific user."""
+        total = self.db.query(DetectionRecord).filter(DetectionRecord.user_id == user_id).count()
+        dga = self.db.query(DetectionRecord).filter(
+            DetectionRecord.user_id == user_id,
+            DetectionRecord.is_dga == True
+        ).count()
+
+        return {
+            'total_checked': total,
+            'dga_detected': dga,
+            'legit_detected': total - dga
+        }
+
+    def get_user_detections(self, user_id: int, limit: int = 100) -> List[DetectionRecord]:
+        """Get detection records for a specific user."""
+        return self.db.query(DetectionRecord)\
+            .filter(DetectionRecord.user_id == user_id)\
+            .order_by(DetectionRecord.timestamp.desc())\
+            .limit(limit)\
+            .all()
+
+
+class UserRepository:
+    """Repository for user records."""
+
+    def __init__(self, db: Session):
+        self.db = db
+
+    def get_by_google_id(self, google_id: str) -> Optional[User]:
+        """Get user by Google ID."""
+        return self.db.query(User).filter(User.google_id == google_id).first()
+
+    def get_by_email(self, email: str) -> Optional[User]:
+        """Get user by email."""
+        return self.db.query(User).filter(User.email == email).first()
+
+    def get_by_id(self, user_id: int) -> Optional[User]:
+        """Get user by ID."""
+        return self.db.query(User).filter(User.id == user_id).first()
+
+    def create(
+        self,
+        google_id: str,
+        email: str,
+        name: Optional[str] = None,
+        picture: Optional[str] = None
+    ) -> User:
+        """Create a new user."""
+        user = User(
+            google_id=google_id,
+            email=email,
+            name=name,
+            picture=picture
+        )
+        self.db.add(user)
+        self.db.commit()
+        self.db.refresh(user)
+        return user
+
+    def update_last_login(self, user: User) -> User:
+        """Update user's last login time."""
+        user.last_login = datetime.now(timezone.utc)
+        self.db.commit()
+        self.db.refresh(user)
+        return user
+
+    def get_or_create(
+        self,
+        google_id: str,
+        email: str,
+        name: Optional[str] = None,
+        picture: Optional[str] = None
+    ) -> tuple[User, bool]:
+        """Get existing user or create new one. Returns (user, created)."""
+        user = self.get_by_google_id(google_id)
+        if user:
+            # Update profile info if changed (name, picture can change on Google)
+            if name and user.name != name:
+                user.name = name
+            if picture and user.picture != picture:
+                user.picture = picture
+            self.update_last_login(user)
+            return user, False
+
+        user = self.create(google_id, email, name, picture)
+        return user, True

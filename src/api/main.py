@@ -7,13 +7,17 @@ import os
 import sys
 import time
 from contextlib import asynccontextmanager
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
+from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Depends, Request, Query
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
+
+# Load environment variables from .env file
+load_dotenv()
 
 # Add parent directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
@@ -23,7 +27,8 @@ from src.api.models import (
     PredictionResponse, BatchPredictionResponse, FeatureResponse,
     StatsResponse, ModelInfoResponse, HealthResponse, DetectionLog
 )
-from src.api.database import init_db, get_db, DetectionRepository
+from src.api.database import init_db, get_db, DetectionRepository, User
+from src.api.auth import router as auth_router, get_current_user
 from src.ml.random_forest_model import RandomForestDGADetector
 from src.ml.lstm_model import LSTMDGADetector
 
@@ -92,6 +97,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Include auth router
+app.include_router(auth_router)
 
 
 def get_active_model(model_type: str = "auto"):
@@ -173,7 +181,8 @@ async def predict_domain(
     req: Request,
     model_type: str = Query("auto", description="Model to use: auto, rf, lstm"),
     log: bool = Query(True, description="Log this detection"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user)
 ):
     """
     Predict if a domain is DGA-generated.
@@ -199,9 +208,10 @@ async def predict_domain(
             confidence=result['confidence'],
             dga_probability=result['dga_probability'],
             model_used=model_name,
-            source="api",
+            source="dashboard",
             user_agent=req.headers.get("user-agent"),
-            ip_address=req.client.host if req.client else None
+            ip_address=req.client.host if req.client else None,
+            user_id=current_user.id if current_user else None
         )
 
     return PredictionResponse(
@@ -211,7 +221,7 @@ async def predict_domain(
         dga_probability=result['dga_probability'],
         legit_probability=result['legit_probability'],
         model_used=model_name,
-        timestamp=datetime.utcnow()
+        timestamp=datetime.now(timezone.utc)
     )
 
 
@@ -221,7 +231,8 @@ async def predict_batch(
     req: Request,
     model_type: str = Query("auto", description="Model to use: auto, rf, lstm"),
     log: bool = Query(True, description="Log these detections"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user)
 ):
     """
     Predict DGA status for multiple domains.
@@ -255,9 +266,10 @@ async def predict_batch(
                 confidence=result['confidence'],
                 dga_probability=result['dga_probability'],
                 model_used=model_name,
-                source="api_batch",
+                source="dashboard_batch",
                 user_agent=req.headers.get("user-agent"),
-                ip_address=req.client.host if req.client else None
+                ip_address=req.client.host if req.client else None,
+                user_id=current_user.id if current_user else None
             )
 
         predictions.append(PredictionResponse(
@@ -267,7 +279,7 @@ async def predict_batch(
             dga_probability=result['dga_probability'],
             legit_probability=result['legit_probability'],
             model_used=model_name,
-            timestamp=datetime.utcnow()
+            timestamp=datetime.now(timezone.utc)
         ))
 
     return BatchPredictionResponse(
@@ -282,7 +294,8 @@ async def predict_batch(
 async def predict_with_features(
     request: DomainRequest,
     req: Request,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user)
 ):
     """
     Predict with detailed feature analysis (Random Forest only).
@@ -303,9 +316,10 @@ async def predict_with_features(
         confidence=result['confidence'],
         dga_probability=result['dga_probability'],
         model_used="random_forest",
-        source="api_detailed",
+        source="dashboard_detailed",
         user_agent=req.headers.get("user-agent"),
-        ip_address=req.client.host if req.client else None
+        ip_address=req.client.host if req.client else None,
+        user_id=current_user.id if current_user else None
     )
 
     return FeatureResponse(
@@ -316,7 +330,7 @@ async def predict_with_features(
         legit_probability=result['legit_probability'],
         features=result['features'],
         model_used="random_forest",
-        timestamp=datetime.utcnow()
+        timestamp=datetime.now(timezone.utc)
     )
 
 
@@ -392,12 +406,14 @@ async def get_models_info():
 async def extension_check(
     request: DomainRequest,
     req: Request,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user)
 ):
     """
     Lightweight endpoint optimized for browser extension.
 
     Returns minimal data for fast response.
+    Optionally accepts authentication to link detections to user.
     """
     model, model_name = get_active_model("auto")
 
@@ -414,7 +430,8 @@ async def extension_check(
         model_used=model_name,
         source="extension",
         user_agent=req.headers.get("user-agent"),
-        ip_address=req.client.host if req.client else None
+        ip_address=req.client.host if req.client else None,
+        user_id=current_user.id if current_user else None
     )
 
     return {
