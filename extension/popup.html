@@ -234,17 +234,96 @@
     .hidden {
       display: none !important;
     }
+
+    .header-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .auth-section {
+      display: flex;
+      align-items: center;
+    }
+
+    .auth-btn {
+      background: rgba(255, 255, 255, 0.2);
+      color: white;
+      border: none;
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.2s;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .auth-btn:hover {
+      background: rgba(255, 255, 255, 0.3);
+    }
+
+    .auth-btn.sign-out {
+      padding: 6px;
+    }
+
+    .user-info {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .user-avatar {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      border: 2px solid rgba(255, 255, 255, 0.5);
+    }
+
+    .sync-status {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 11px;
+      opacity: 0.9;
+      margin-top: 4px;
+      color: #a7f3d0;
+    }
   </style>
 </head>
 <body>
   <div class="header">
-    <h1>
-      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-      </svg>
-      DGA Detector
-    </h1>
+    <div class="header-top">
+      <h1>
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+        </svg>
+        DGA Detector
+      </h1>
+      <div id="auth-section" class="auth-section">
+        <button id="sign-in-btn" class="auth-btn">Sign In</button>
+        <div id="user-info" class="user-info hidden">
+          <img id="user-avatar" class="user-avatar" alt="User">
+          <button id="sign-out-btn" class="auth-btn sign-out">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+              <polyline points="16 17 21 12 16 7"/>
+              <line x1="21" y1="12" x2="9" y2="12"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+    </div>
     <p>Real-time domain threat detection</p>
+    <div id="sync-status" class="sync-status hidden">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+        <polyline points="22 4 12 14.01 9 11.01"/>
+      </svg>
+      Synced with dashboard
+    </div>
   </div>
 
   <div class="content">

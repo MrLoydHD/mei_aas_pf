@@ -6,12 +6,21 @@
   "permissions": [
     "activeTab",
     "storage",
-    "webNavigation"
+    "webNavigation",
+    "identity"
   ],
   "host_permissions": [
     "http://localhost:8000/*",
     "<all_urls>"
   ],
+  "oauth2": {
+    "client_id": "508080522072-5jpalk5ruph618is787g7cp875510e4b.apps.googleusercontent.com",
+    "scopes": [
+      "openid",
+      "email",
+      "profile"
+    ]
+  },
   "action": {
     "default_popup": "popup.html",
     "default_icon": {

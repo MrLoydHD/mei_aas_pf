@@ -14,12 +14,152 @@ let stats = {
   lastChecked: null
 };
 
-// Load stats from storage on startup
-chrome.storage.local.get(['dgaStats'], (result) => {
+// Auth state
+let authToken = null;
+let currentUser = null;
+
+// Load stats and auth from storage on startup
+chrome.storage.local.get(['dgaStats', 'authToken', 'currentUser'], (result) => {
   if (result.dgaStats) {
     stats = result.dgaStats;
   }
+  if (result.authToken) {
+    authToken = result.authToken;
+  }
+  if (result.currentUser) {
+    currentUser = result.currentUser;
+  }
 });
+
+// Google Sign-In
+async function signIn() {
+  try {
+    console.log('Starting sign in...');
+
+    // Get Google auth token using Chrome Identity API
+    const token = await new Promise((resolve, reject) => {
+      chrome.identity.getAuthToken({ interactive: true }, (token) => {
+        if (chrome.runtime.lastError) {
+          console.error('Chrome identity error:', chrome.runtime.lastError);
+          reject(new Error(chrome.runtime.lastError.message));
+        } else if (!token) {
+          reject(new Error('No token received'));
+        } else {
+          console.log('Got Google token');
+          resolve(token);
+        }
+      });
+    });
+
+    console.log('Exchanging token with backend...');
+
+    // Exchange Google access token for our JWT via extension endpoint
+    const response = await fetch(`${API_URL}/auth/extension`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ access_token: token })
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('Backend auth failed:', response.status, errorText);
+      throw new Error(`Auth failed: ${response.status} - ${errorText}`);
+    }
+
+    const data = await response.json();
+    console.log('Auth successful, user:', data.user.email);
+
+    authToken = data.token;
+    currentUser = data.user;
+
+    // Save to storage
+    chrome.storage.local.set({
+      authToken: authToken,
+      currentUser: currentUser
+    });
+
+    // Sync local stats to server
+    await syncStats();
+
+    return { success: true, user: currentUser };
+  } catch (error) {
+    console.error('Sign in failed:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+// Sign out
+async function signOut() {
+  try {
+    // Revoke Google token
+    await new Promise((resolve) => {
+      chrome.identity.clearAllCachedAuthTokens(resolve);
+    });
+
+    authToken = null;
+    currentUser = null;
+
+    chrome.storage.local.remove(['authToken', 'currentUser']);
+
+    return { success: true };
+  } catch (error) {
+    console.error('Sign out failed:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+// Sync local stats to server
+async function syncStats() {
+  if (!authToken) return;
+
+  try {
+    const response = await fetch(`${API_URL}/auth/sync`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${authToken}`
+      },
+      body: JSON.stringify({
+        total_checked: stats.totalChecked,
+        dga_detected: stats.dgaDetected,
+        legit_detected: stats.legitDetected
+      })
+    });
+
+    if (response.ok) {
+      const serverStats = await response.json();
+      // Update local stats with server stats (merge)
+      stats.totalChecked = Math.max(stats.totalChecked, serverStats.total_checked);
+      stats.dgaDetected = Math.max(stats.dgaDetected, serverStats.dga_detected);
+      stats.legitDetected = Math.max(stats.legitDetected, serverStats.legit_detected);
+      chrome.storage.local.set({ dgaStats: stats });
+    }
+  } catch (error) {
+    console.error('Sync failed:', error);
+  }
+}
+
+// Get server stats
+async function getServerStats() {
+  if (!authToken) return null;
+
+  try {
+    const response = await fetch(`${API_URL}/auth/stats`, {
+      headers: {
+        'Authorization': `Bearer ${authToken}`
+      }
+    });
+
+    if (response.ok) {
+      return await response.json();
+    }
+  } catch (error) {
+    console.error('Get server stats failed:', error);
+  }
+  return null;
+}
 
 // Extract domain from URL
 function extractDomain(url) {
@@ -68,11 +208,18 @@ async function checkDomain(domain) {
   }
 
   try {
+    const headers = {
+      'Content-Type': 'application/json'
+    };
+
+    // Add auth header if signed in
+    if (authToken) {
+      headers['Authorization'] = `Bearer ${authToken}`;
+    }
+
     const response = await fetch(`${API_URL}/extension/check`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
+      headers,
       body: JSON.stringify({ domain })
     });
 
@@ -191,6 +338,35 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     };
     chrome.storage.local.set({ dgaStats: stats });
     sendResponse({ success: true });
+    return true;
+  }
+
+  if (message.type === 'SIGN_IN') {
+    signIn().then(result => {
+      sendResponse(result);
+    });
+    return true;
+  }
+
+  if (message.type === 'SIGN_OUT') {
+    signOut().then(result => {
+      sendResponse(result);
+    });
+    return true;
+  }
+
+  if (message.type === 'GET_AUTH_STATUS') {
+    sendResponse({
+      isSignedIn: !!authToken,
+      user: currentUser
+    });
+    return true;
+  }
+
+  if (message.type === 'SYNC_STATS') {
+    syncStats().then(() => {
+      sendResponse({ success: true });
+    });
     return true;
   }
 });
