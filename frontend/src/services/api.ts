@@ -20,7 +20,83 @@ const api = axios.create({
   },
 });
 
+// Auth types
+interface User {
+  id: number;
+  email: string;
+  name: string | null;
+  picture: string | null;
+}
+
+interface AuthResponse {
+  user: User;
+  token: string;
+  created: boolean;
+}
+
+interface UserStats {
+  total_checked: number;
+  dga_detected: number;
+  legit_detected: number;
+}
+
+interface UserDetection {
+  id: number;
+  domain: string;
+  is_dga: boolean;
+  confidence: number;
+  source: string | null;
+  timestamp: string;
+}
+
+interface UserDetectionsResponse {
+  detections: UserDetection[];
+  total: number;
+  dga_count: number;
+  legit_count: number;
+}
+
 export const dgaApi = {
+  // Set auth token for authenticated requests
+  setAuthToken(token: string | null) {
+    if (token) {
+      api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+    } else {
+      delete api.defaults.headers.common['Authorization'];
+    }
+  },
+
+  // Auth endpoints
+  async googleAuth(credential: string): Promise<AuthResponse> {
+    const response = await api.post('/auth/google', { credential });
+    return response.data;
+  },
+
+  async verifyToken(): Promise<{ valid: boolean; user_id: string }> {
+    const response = await api.post('/auth/verify');
+    return response.data;
+  },
+
+  async getMe(): Promise<User> {
+    const response = await api.get('/auth/me');
+    return response.data;
+  },
+
+  async getUserStats(): Promise<UserStats> {
+    const response = await api.get('/auth/stats');
+    return response.data;
+  },
+
+  async syncStats(stats: UserStats): Promise<UserStats> {
+    const response = await api.post('/auth/sync', stats);
+    return response.data;
+  },
+
+  async getUserDetections(limit: number = 50): Promise<UserDetectionsResponse> {
+    const response = await api.get(`/auth/detections?limit=${limit}`);
+    return response.data;
+  },
+
   // Health check
   async getHealth(): Promise<HealthStatus> {
     const response = await api.get('/health');
