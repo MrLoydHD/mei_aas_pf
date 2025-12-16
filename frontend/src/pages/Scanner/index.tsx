@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { motion } from 'framer-motion';
 import { AlertTriangle } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { dgaApi } from '@/services/api';
@@ -56,12 +57,27 @@ export default function Scanner() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <motion.div
+      className="space-y-6"
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.4, ease: "easeOut" }}
+    >
+      <motion.div
+        className="flex items-center justify-between"
+        initial={{ opacity: 0, x: -20 }}
+        animate={{ opacity: 1, x: 0 }}
+        transition={{ duration: 0.4, delay: 0.1 }}
+      >
         <h1 className="text-2xl font-bold text-foreground">Domain Scanner</h1>
-      </div>
+      </motion.div>
 
-      <ScannerForm
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4, delay: 0.15 }}
+      >
+        <ScannerForm
         mode={mode}
         onModeChange={setMode}
         domain={domain}
@@ -76,25 +92,44 @@ export default function Scanner() {
         onSingleScan={handleSingleScan}
         onBatchScan={handleBatchScan}
       />
+      </motion.div>
 
       {error && (
-        <Card className="border-destructive bg-destructive/10">
-          <CardContent className="pt-6">
-            <div className="flex items-center">
-              <AlertTriangle className="h-5 w-5 text-destructive mr-2" />
-              <p className="text-destructive">{error}</p>
-            </div>
-          </CardContent>
-        </Card>
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.3 }}
+        >
+          <Card className="border-destructive bg-destructive/10">
+            <CardContent className="pt-6">
+              <div className="flex items-center">
+                <AlertTriangle className="h-5 w-5 text-destructive mr-2" />
+                <p className="text-destructive">{error}</p>
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
       )}
 
       {result && mode === 'single' && (
-        <ResultCard result={result} detailed={detailed} />
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4 }}
+        >
+          <ResultCard result={result} detailed={detailed} />
+        </motion.div>
       )}
 
       {batchResults && mode === 'batch' && (
-        <BatchResults results={batchResults} />
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4 }}
+        >
+          <BatchResults results={batchResults} />
+        </motion.div>
       )}
-    </div>
+    </motion.div>
   );
 }
