@@ -436,5 +436,9 @@ class LSTMDGADetector:
         self.learning_rate = metadata['learning_rate']
         self.metrics = metadata['metrics']
 
+        # Load training history if available
+        if 'history' in metadata:
+            self.metrics['history'] = metadata['history']
+
         self.is_trained = True
         print(f"Model loaded from {path}")
