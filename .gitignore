@@ -219,8 +219,12 @@ yarn-error.log*
 *.swo
 
 # Project specific
-models/*.joblib
-models/*.keras
-models/lstm/
+models/
 archive/
 *.db
+
+# Secrets - NEVER commit these
+secrets/
+
+# Large data files (optional - uncomment if you want to track dataset)
+# data/raw/dga_domains_full.csv
