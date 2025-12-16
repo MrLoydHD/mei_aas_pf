@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react';
+import { motion } from 'framer-motion';
 import { AlertTriangle, Info } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { dgaApi } from '@/services/api';
 import type { ModelInfo, HealthStatus } from '@/types';
 import { ModelCard } from './components/ModelCard';
+import { ModelDetailDialog } from './components/ModelDetailDialog';
 import { SystemStatus } from './components/SystemStatus';
 import { ModelComparison } from './components/ModelComparison';
 
@@ -12,6 +14,8 @@ export default function Models() {
   const [health, setHealth] = useState<HealthStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [selectedModel, setSelectedModel] = useState<ModelInfo | null>(null);
+  const [dialogOpen, setDialogOpen] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -55,37 +59,93 @@ export default function Models() {
   }
 
   return (
-    <div className="space-y-6">
-      <h1 className="text-2xl font-bold text-foreground">Model Information</h1>
+    <motion.div
+      className="space-y-6"
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.4, ease: "easeOut" }}
+    >
+      <motion.h1
+        className="text-2xl font-bold text-foreground"
+        initial={{ opacity: 0, x: -20 }}
+        animate={{ opacity: 1, x: 0 }}
+        transition={{ duration: 0.4, delay: 0.1 }}
+      >
+        Model Information
+      </motion.h1>
 
-      {health && <SystemStatus health={health} />}
-
-      {models.length === 0 ? (
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-start space-x-3">
-              <Info className="h-5 w-5 text-primary mt-0.5" />
-              <div>
-                <h3 className="font-semibold text-foreground">No Models Loaded</h3>
-                <p className="text-sm text-muted-foreground mt-1">
-                  Train the models first by running:
-                </p>
-                <pre className="mt-2 bg-muted p-3 rounded text-sm font-mono">
-                  python -m src.ml.train
-                </pre>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="space-y-6">
-          {models.map((model) => (
-            <ModelCard key={model.model_type} model={model} />
-          ))}
-        </div>
+      {health && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, delay: 0.15 }}
+        >
+          <SystemStatus health={health} />
+        </motion.div>
       )}
 
-      <ModelComparison />
-    </div>
+      {models.length === 0 ? (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, delay: 0.2 }}
+        >
+          <Card>
+            <CardContent className="pt-6">
+              <div className="flex items-start space-x-3">
+                <Info className="h-5 w-5 text-primary mt-0.5" />
+                <div>
+                  <h3 className="font-semibold text-foreground">No Models Loaded</h3>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Train the models first by running:
+                  </p>
+                  <pre className="mt-2 bg-muted p-3 rounded text-sm font-mono">
+                    python -m src.ml.train
+                  </pre>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
+      ) : (
+        <motion.div
+          className="grid grid-cols-1 gap-6"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, delay: 0.2 }}
+        >
+          {models.map((model, index) => (
+            <motion.div
+              key={model.model_type}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3, delay: 0.25 + index * 0.1 }}
+            >
+              <ModelCard
+                model={model}
+                onViewDetails={() => {
+                  setSelectedModel(model);
+                  setDialogOpen(true);
+                }}
+              />
+            </motion.div>
+          ))}
+        </motion.div>
+      )}
+
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4, delay: 0.35 }}
+      >
+        <ModelComparison />
+      </motion.div>
+
+      <ModelDetailDialog
+        model={selectedModel}
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+      />
+    </motion.div>
   );
 }
