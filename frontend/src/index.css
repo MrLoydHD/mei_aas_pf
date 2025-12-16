@@ -248,3 +248,36 @@
     @apply bg-background text-foreground;
   }
 }
+
+@keyframes slideIn {
+  0% {
+    opacity: 0;
+    transform: translateX(100px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.animate-slideIn {
+  animation: slideIn 0.6s ease-out forwards;
+}
+
+/* Added infinite scroll animation with fade out at edges */
+@keyframes infiniteScroll {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(calc(-350px * 5 - 24px * 5));
+  }
+}
+
+.animate-infiniteScroll {
+  animation: infiniteScroll 25s linear infinite;
+}
+
+.animate-infiniteScroll:hover {
+  animation-play-state: paused;
+}
