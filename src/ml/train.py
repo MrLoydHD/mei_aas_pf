@@ -20,6 +20,16 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 from src.ml.features import DomainFeatureExtractor, remove_outliers
 from src.ml.random_forest_model import RandomForestDGADetector
 from src.ml.lstm_model import LSTMDGADetector
+from src.ml.xgboost_model import XGBoostDGADetector
+from src.ml.gradient_boosting_model import GradientBoostingDGADetector
+from src.ml.transformer_model import TransformerDGADetector
+
+# Optional: DistilBERT (requires transformers library)
+try:
+    from src.ml.distilbert_model import DistilBERTDGADetector
+    DISTILBERT_AVAILABLE = True
+except ImportError:
+    DISTILBERT_AVAILABLE = False
 
 
 def load_data(dga_path: str, legit_path: str, sample_size: int = None):
@@ -170,173 +180,159 @@ def train_random_forest(dga_domains, legit_domains, word_dict_path, legit_path, 
 
 
 def train_xgboost(dga_domains, legit_domains, word_dict_path, legit_path, models_dir, plots_dir):
-    """Train XGBoost model (from notebook approach)."""
+    """Train XGBoost model using XGBoostDGADetector class."""
     print("\n" + "="*60)
     print("TRAINING XGBOOST MODEL")
     print("="*60)
 
     try:
-        from xgboost import XGBClassifier
-        import joblib
-        from sklearn.model_selection import train_test_split
-        from sklearn.metrics import (
-            accuracy_score, precision_score, recall_score,
-            f1_score, roc_auc_score, confusion_matrix
-        )
-
-        # Create feature extractor with TF-IDF
-        feature_extractor = DomainFeatureExtractor(
+        xgb_model = XGBoostDGADetector(
+            n_estimators=200,
+            max_depth=10,
+            learning_rate=0.1,
             word_dict_path=word_dict_path,
             legit_domains_path=legit_path,
             use_tfidf=True
         )
 
-        print(f"Extracting features from {len(dga_domains)} DGA domains...")
-        dga_features = feature_extractor.extract_features_batch(dga_domains)
-
-        print(f"Extracting features from {len(legit_domains)} legitimate domains...")
-        legit_features = feature_extractor.extract_features_batch(legit_domains)
-
-        X = pd.concat([dga_features, legit_features], ignore_index=True)
-        y = np.array([1] * len(dga_domains) + [0] * len(legit_domains))
-
-        X_train, X_test, y_train, y_test = train_test_split(
-            X.values, y, test_size=0.2, random_state=42, stratify=y
-        )
-
-        print(f"Training on {len(X_train)} samples...")
-        xgb_model = XGBClassifier(
-            n_estimators=200,
-            max_depth=10,
-            learning_rate=0.1,
-            random_state=42,
-            use_label_encoder=False,
-            eval_metric='logloss'
-        )
-        xgb_model.fit(X_train, y_train)
-
-        y_pred = xgb_model.predict(X_test)
-        y_prob = xgb_model.predict_proba(X_test)[:, 1]
-
-        metrics = {
-            'accuracy': accuracy_score(y_test, y_pred),
-            'precision': precision_score(y_test, y_pred),
-            'recall': recall_score(y_test, y_pred),
-            'f1': f1_score(y_test, y_pred),
-            'roc_auc': roc_auc_score(y_test, y_prob),
-            'confusion_matrix': confusion_matrix(y_test, y_pred).tolist()
-        }
-
-        print(f"\nResults:")
-        print(f"  Accuracy: {metrics['accuracy']:.4f}")
-        print(f"  Precision: {metrics['precision']:.4f}")
-        print(f"  Recall: {metrics['recall']:.4f}")
-        print(f"  F1-Score: {metrics['f1']:.4f}")
-        print(f"  ROC-AUC: {metrics['roc_auc']:.4f}")
+        X, y = xgb_model.prepare_data(dga_domains, legit_domains)
+        metrics = xgb_model.train(X, y, test_size=0.2)
 
         # Save model
-        model_data = {
-            'model': xgb_model,
-            'feature_extractor': feature_extractor,
-            'feature_names': feature_extractor.get_feature_names(),
-            'metrics': metrics
-        }
-        joblib.dump(model_data, os.path.join(models_dir, 'xgboost.joblib'))
-        print(f"XGBoost model saved")
+        xgb_model.save(os.path.join(models_dir, 'xgboost.joblib'))
 
-        # Save confusion matrix
+        # Save plots
         plot_confusion_matrix(
             np.array(metrics['confusion_matrix']),
             'XGBoost Confusion Matrix',
             os.path.join(plots_dir, 'xgb_confusion_matrix.png')
         )
 
+        plot_feature_importance(
+            xgb_model.get_feature_importance(),
+            os.path.join(plots_dir, 'xgb_feature_importance.png')
+        )
+
         return metrics
 
-    except ImportError:
-        print("XGBoost not installed. Skipping XGBoost training.")
+    except ImportError as e:
+        print(f"XGBoost not installed. Skipping XGBoost training: {e}")
         print("Install with: pip install xgboost")
         return None
 
 
 def train_gradient_boosting(dga_domains, legit_domains, word_dict_path, legit_path, models_dir, plots_dir):
-    """Train Gradient Boosting model."""
+    """Train Gradient Boosting model using GradientBoostingDGADetector class."""
     print("\n" + "="*60)
     print("TRAINING GRADIENT BOOSTING MODEL")
     print("="*60)
 
-    from sklearn.ensemble import GradientBoostingClassifier
-    import joblib
-    from sklearn.model_selection import train_test_split
-    from sklearn.metrics import (
-        accuracy_score, precision_score, recall_score,
-        f1_score, roc_auc_score, confusion_matrix
-    )
-
-    # Create feature extractor with TF-IDF
-    feature_extractor = DomainFeatureExtractor(
+    gb_model = GradientBoostingDGADetector(
+        n_estimators=200,
+        max_depth=5,
+        learning_rate=0.1,
         word_dict_path=word_dict_path,
         legit_domains_path=legit_path,
         use_tfidf=True
     )
 
-    print(f"Extracting features from {len(dga_domains)} DGA domains...")
-    dga_features = feature_extractor.extract_features_batch(dga_domains)
-
-    print(f"Extracting features from {len(legit_domains)} legitimate domains...")
-    legit_features = feature_extractor.extract_features_batch(legit_domains)
-
-    X = pd.concat([dga_features, legit_features], ignore_index=True)
-    y = np.array([1] * len(dga_domains) + [0] * len(legit_domains))
-
-    X_train, X_test, y_train, y_test = train_test_split(
-        X.values, y, test_size=0.2, random_state=42, stratify=y
-    )
-
-    print(f"Training on {len(X_train)} samples...")
-    gb_model = GradientBoostingClassifier(
-        n_estimators=100,
-        max_depth=5,
-        learning_rate=0.1,
-        random_state=42
-    )
-    gb_model.fit(X_train, y_train)
-
-    y_pred = gb_model.predict(X_test)
-    y_prob = gb_model.predict_proba(X_test)[:, 1]
-
-    metrics = {
-        'accuracy': accuracy_score(y_test, y_pred),
-        'precision': precision_score(y_test, y_pred),
-        'recall': recall_score(y_test, y_pred),
-        'f1': f1_score(y_test, y_pred),
-        'roc_auc': roc_auc_score(y_test, y_prob),
-        'confusion_matrix': confusion_matrix(y_test, y_pred).tolist()
-    }
-
-    print(f"\nResults:")
-    print(f"  Accuracy: {metrics['accuracy']:.4f}")
-    print(f"  Precision: {metrics['precision']:.4f}")
-    print(f"  Recall: {metrics['recall']:.4f}")
-    print(f"  F1-Score: {metrics['f1']:.4f}")
-    print(f"  ROC-AUC: {metrics['roc_auc']:.4f}")
+    X, y = gb_model.prepare_data(dga_domains, legit_domains)
+    metrics = gb_model.train(X, y, test_size=0.2)
 
     # Save model
-    model_data = {
-        'model': gb_model,
-        'feature_extractor': feature_extractor,
-        'feature_names': feature_extractor.get_feature_names(),
-        'metrics': metrics
-    }
-    joblib.dump(model_data, os.path.join(models_dir, 'gradient_boosting.joblib'))
-    print(f"Gradient Boosting model saved")
+    gb_model.save(os.path.join(models_dir, 'gradient_boosting.joblib'))
 
-    # Save confusion matrix
+    # Save plots
     plot_confusion_matrix(
         np.array(metrics['confusion_matrix']),
         'Gradient Boosting Confusion Matrix',
         os.path.join(plots_dir, 'gb_confusion_matrix.png')
     )
+
+    plot_feature_importance(
+        gb_model.get_feature_importance(),
+        os.path.join(plots_dir, 'gb_feature_importance.png')
+    )
+
+    return metrics
+
+
+def train_transformer(dga_domains, legit_domains, models_dir, plots_dir, epochs=30):
+    """Train Transformer model using TransformerDGADetector class."""
+    print("\n" + "="*60)
+    print("TRAINING TRANSFORMER MODEL")
+    print("="*60)
+
+    transformer_model = TransformerDGADetector(
+        max_length=63,
+        embedding_dim=64,
+        num_heads=4,
+        num_layers=2,
+        ff_dim=128,
+        dropout_rate=0.1
+    )
+
+    X, y = transformer_model.prepare_data(dga_domains, legit_domains)
+    metrics = transformer_model.train(
+        X, y,
+        test_size=0.2,
+        epochs=epochs,
+        batch_size=256
+    )
+
+    # Save model
+    transformer_model.save(os.path.join(models_dir, 'transformer'))
+
+    # Save plots
+    plot_confusion_matrix(
+        np.array(metrics['confusion_matrix']),
+        'Transformer Confusion Matrix',
+        os.path.join(plots_dir, 'transformer_confusion_matrix.png')
+    )
+
+    history = transformer_model.get_training_history()
+    if history:
+        plot_training_history(history, os.path.join(plots_dir, 'transformer_training_history.png'))
+
+    return metrics
+
+
+def train_distilbert(dga_domains, legit_domains, models_dir, plots_dir, epochs=3):
+    """Train DistilBERT model using DistilBERTDGADetector class."""
+    print("\n" + "="*60)
+    print("TRAINING DISTILBERT MODEL")
+    print("="*60)
+
+    if not DISTILBERT_AVAILABLE:
+        print("DistilBERT not available. Install transformers: pip install transformers")
+        return None
+
+    distilbert_model = DistilBERTDGADetector(
+        max_length=128,
+        learning_rate=2e-5
+    )
+
+    X, y = distilbert_model.prepare_data(dga_domains, legit_domains)
+    metrics = distilbert_model.train(
+        X, y,
+        test_size=0.2,
+        epochs=epochs,
+        batch_size=32
+    )
+
+    # Save model
+    distilbert_model.save(os.path.join(models_dir, 'distilbert'))
+
+    # Save plots
+    plot_confusion_matrix(
+        np.array(metrics['confusion_matrix']),
+        'DistilBERT Confusion Matrix',
+        os.path.join(plots_dir, 'distilbert_confusion_matrix.png')
+    )
+
+    history = distilbert_model.get_training_history()
+    if history:
+        plot_training_history(history, os.path.join(plots_dir, 'distilbert_training_history.png'))
 
     return metrics
 
@@ -400,8 +396,16 @@ def main():
                        help='Train only Random Forest model')
     parser.add_argument('--lstm-only', action='store_true',
                        help='Train only LSTM model')
+    parser.add_argument('--xgboost-only', action='store_true',
+                       help='Train only XGBoost model')
+    parser.add_argument('--gb-only', action='store_true',
+                       help='Train only Gradient Boosting model')
+    parser.add_argument('--transformer-only', action='store_true',
+                       help='Train only Transformer model')
+    parser.add_argument('--distilbert-only', action='store_true',
+                       help='Train only DistilBERT model')
     parser.add_argument('--all-models', action='store_true',
-                       help='Train all models including XGBoost and Gradient Boosting')
+                       help='Train all models including XGBoost, GB, Transformer, and DistilBERT')
 
     args = parser.parse_args()
 
@@ -418,8 +422,12 @@ def main():
 
     results = {}
 
+    # Determine which models to train
+    train_specific = (args.rf_only or args.lstm_only or args.xgboost_only or
+                      args.gb_only or args.transformer_only or args.distilbert_only)
+
     # Train Random Forest
-    if not args.lstm_only:
+    if args.rf_only or (not train_specific):
         rf_metrics = train_random_forest(
             dga_domains, legit_domains,
             args.word_dict,
@@ -430,7 +438,7 @@ def main():
         results['Random Forest'] = rf_metrics
 
     # Train LSTM
-    if not args.rf_only:
+    if args.lstm_only or (not train_specific):
         lstm_metrics = train_lstm(
             dga_domains, legit_domains,
             args.models_dir,
@@ -439,9 +447,8 @@ def main():
         )
         results['LSTM'] = lstm_metrics
 
-    # Train additional models if requested
-    if args.all_models:
-        # XGBoost
+    # Train XGBoost
+    if args.xgboost_only or args.all_models:
         xgb_metrics = train_xgboost(
             dga_domains, legit_domains,
             args.word_dict,
@@ -452,7 +459,8 @@ def main():
         if xgb_metrics:
             results['XGBoost'] = xgb_metrics
 
-        # Gradient Boosting
+    # Train Gradient Boosting
+    if args.gb_only or args.all_models:
         gb_metrics = train_gradient_boosting(
             dga_domains, legit_domains,
             args.word_dict,
@@ -461,6 +469,27 @@ def main():
             args.plots_dir
         )
         results['Gradient Boosting'] = gb_metrics
+
+    # Train Transformer
+    if args.transformer_only or args.all_models:
+        transformer_metrics = train_transformer(
+            dga_domains, legit_domains,
+            args.models_dir,
+            args.plots_dir,
+            args.epochs
+        )
+        results['Transformer'] = transformer_metrics
+
+    # Train DistilBERT
+    if args.distilbert_only or args.all_models:
+        distilbert_metrics = train_distilbert(
+            dga_domains, legit_domains,
+            args.models_dir,
+            args.plots_dir,
+            epochs=3  # DistilBERT typically needs fewer epochs
+        )
+        if distilbert_metrics:
+            results['DistilBERT'] = distilbert_metrics
 
     # Plot comparison if multiple models trained
     if len(results) > 1:
