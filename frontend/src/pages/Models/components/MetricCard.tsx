@@ -16,16 +16,20 @@ const colorMap: Record<string, string> = {
 };
 
 export function MetricCard({ label, value, color }: MetricCardProps) {
-  const percentage = value * 100;
+  const safeValue = value ?? 0;
+  const percentage = safeValue * 100;
   const indicatorColor = colorMap[color] || 'bg-primary';
+  const isValid = value !== undefined && value !== null && !isNaN(value);
 
   return (
     <div className="bg-muted rounded-lg p-4">
       <div className="flex items-center justify-between mb-2">
         <span className="text-sm text-muted-foreground">{label}</span>
-        <span className={`text-lg font-bold ${color}`}>{percentage.toFixed(2)}%</span>
+        <span className={`text-lg font-bold ${color}`}>
+          {isValid ? `${percentage.toFixed(2)}%` : 'N/A'}
+        </span>
       </div>
-      <Progress value={percentage} className="h-2" indicatorClassName={indicatorColor} />
+      <Progress value={isValid ? percentage : 0} className="h-2" indicatorClassName={indicatorColor} />
     </div>
   );
 }

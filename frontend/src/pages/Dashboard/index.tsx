@@ -208,13 +208,17 @@ export default function Dashboard() {
                   {userStats.detections.map((detection) => (
                     <div
                       key={detection.id}
-                      className="flex items-center justify-between p-3 rounded-lg bg-muted/50"
+                      className={`flex items-center justify-between p-3 rounded-lg border ${
+                        detection.is_dga
+                          ? 'bg-red-500/10 border-red-500/30 dark:bg-red-500/20 dark:border-red-500/40'
+                          : 'bg-green-500/10 border-green-500/30 dark:bg-green-500/20 dark:border-green-500/40'
+                      }`}
                     >
                       <div className="flex items-center gap-3">
                         {detection.is_dga ? (
-                          <AlertTriangle className="h-4 w-4 text-destructive" />
+                          <AlertTriangle className="h-4 w-4 text-red-600 dark:text-red-400" />
                         ) : (
-                          <CheckCircle className="h-4 w-4 text-green-500" />
+                          <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-400" />
                         )}
                         <span className="font-mono text-sm">{detection.domain}</span>
                       </div>

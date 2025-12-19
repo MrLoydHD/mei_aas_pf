@@ -3,20 +3,23 @@ import { motion } from 'framer-motion';
 import { AlertTriangle } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { dgaApi } from '@/services/api';
-import type { PredictionResult, DetailedPrediction } from '@/types';
+import type { PredictionResult, DetailedPrediction, FamilyPredictionResult } from '@/types';
 import { ScannerForm } from './components/ScannerForm';
 import { ResultCard } from './components/ResultCard';
+import { FamilyResultCard } from './components/FamilyResultCard';
 import { BatchResults } from './components/BatchResults';
 
 export default function Scanner() {
   const [domain, setDomain] = useState('');
   const [batchInput, setBatchInput] = useState('');
   const [result, setResult] = useState<PredictionResult | DetailedPrediction | null>(null);
+  const [familyResult, setFamilyResult] = useState<FamilyPredictionResult | null>(null);
   const [batchResults, setBatchResults] = useState<PredictionResult[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [mode, setMode] = useState<'single' | 'batch'>('single');
   const [detailed, setDetailed] = useState(false);
+  const [includeFamily, setIncludeFamily] = useState(true);
   const [modelType, setModelType] = useState('auto');
 
   const handleSingleScan = async () => {
@@ -25,12 +28,20 @@ export default function Scanner() {
     setLoading(true);
     setError(null);
     setResult(null);
+    setFamilyResult(null);
 
     try {
-      const data = detailed
-        ? await dgaApi.predictDetailed(domain)
-        : await dgaApi.predict(domain, modelType);
-      setResult(data);
+      if (includeFamily && !detailed) {
+        // Use family prediction endpoint (includes DGA detection + family classification)
+        const data = await dgaApi.predictWithFamily(domain, modelType);
+        setFamilyResult(data);
+      } else if (detailed) {
+        const data = await dgaApi.predictDetailed(domain);
+        setResult(data);
+      } else {
+        const data = await dgaApi.predict(domain, modelType);
+        setResult(data);
+      }
     } catch {
       setError('Failed to analyze domain. Is the API running?');
     } finally {
@@ -88,6 +99,8 @@ export default function Scanner() {
         onModelTypeChange={setModelType}
         detailed={detailed}
         onDetailedChange={setDetailed}
+        includeFamily={includeFamily}
+        onIncludeFamilyChange={setIncludeFamily}
         loading={loading}
         onSingleScan={handleSingleScan}
         onBatchScan={handleBatchScan}
@@ -111,7 +124,17 @@ export default function Scanner() {
         </motion.div>
       )}
 
-      {result && mode === 'single' && (
+      {familyResult && mode === 'single' && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4 }}
+        >
+          <FamilyResultCard result={familyResult} />
+        </motion.div>
+      )}
+
+      {result && mode === 'single' && !familyResult && (
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}

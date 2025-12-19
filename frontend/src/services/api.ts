@@ -5,7 +5,10 @@ import type {
   BatchPredictionResult,
   Stats,
   ModelInfo,
-  HealthStatus
+  HealthStatus,
+  FamilyPredictionResult,
+  FamiliesInfo,
+  FamilyStatsResponse
 } from '../types';
 
 // In production (Docker), use /api which nginx proxies to backend
@@ -130,6 +133,22 @@ export const dgaApi = {
   // Get model info
   async getModels(): Promise<{ models: ModelInfo[] }> {
     const response = await api.get('/models');
+    return response.data;
+  },
+
+  // Family classification endpoints
+  async predictWithFamily(domain: string, modelType: string = 'auto'): Promise<FamilyPredictionResult> {
+    const response = await api.post(`/predict/family?model_type=${modelType}`, { domain });
+    return response.data;
+  },
+
+  async getFamiliesInfo(): Promise<FamiliesInfo> {
+    const response = await api.get('/families');
+    return response.data;
+  },
+
+  async getFamilyStats(): Promise<FamilyStatsResponse> {
+    const response = await api.get('/stats/families');
     return response.data;
   },
 };

@@ -1,8 +1,9 @@
-import { Search, Loader2, Info } from 'lucide-react';
+import { Search, Loader2, Info, Shield } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { BINARY_MODEL_OPTIONS, BinaryModelType } from '@/types';
 
 interface ScannerFormProps {
   mode: 'single' | 'batch';
@@ -15,6 +16,8 @@ interface ScannerFormProps {
   onModelTypeChange: (value: string) => void;
   detailed: boolean;
   onDetailedChange: (value: boolean) => void;
+  includeFamily: boolean;
+  onIncludeFamilyChange: (value: boolean) => void;
   loading: boolean;
   onSingleScan: () => void;
   onBatchScan: () => void;
@@ -31,6 +34,8 @@ export function ScannerForm({
   onModelTypeChange,
   detailed,
   onDetailedChange,
+  includeFamily,
+  onIncludeFamilyChange,
   loading,
   onSingleScan,
   onBatchScan
@@ -44,30 +49,51 @@ export function ScannerForm({
             <TabsTrigger value="batch">Batch Scan</TabsTrigger>
           </TabsList>
 
-          <div className="flex items-center space-x-4 mb-4">
+          <div className="flex flex-wrap items-center gap-4 mb-4">
             <label className="flex items-center">
               <span className="text-sm text-muted-foreground mr-2">Model:</span>
               <select
                 value={modelType}
-                onChange={(e) => onModelTypeChange(e.target.value)}
+                onChange={(e) => onModelTypeChange(e.target.value as BinaryModelType)}
                 className="h-10 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
-                <option value="auto">Auto</option>
-                <option value="rf">Random Forest</option>
-                <option value="lstm">LSTM</option>
+                {BINARY_MODEL_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value} title={option.description}>
+                    {option.label}
+                  </option>
+                ))}
               </select>
             </label>
 
             {mode === 'single' && (
-              <label className="flex items-center">
-                <input
-                  type="checkbox"
-                  checked={detailed}
-                  onChange={(e) => onDetailedChange(e.target.checked)}
-                  className="mr-2 h-4 w-4 rounded border-input"
-                />
-                <span className="text-sm text-muted-foreground">Show features (RF only)</span>
-              </label>
+              <>
+                <label className="flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={includeFamily}
+                    onChange={(e) => {
+                      onIncludeFamilyChange(e.target.checked);
+                      if (e.target.checked) onDetailedChange(false);
+                    }}
+                    className="mr-2 h-4 w-4 rounded border-input"
+                  />
+                  <Shield className="h-4 w-4 mr-1 text-destructive" />
+                  <span className="text-sm text-muted-foreground">Family classification</span>
+                </label>
+
+                <label className="flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={detailed}
+                    onChange={(e) => {
+                      onDetailedChange(e.target.checked);
+                      if (e.target.checked) onIncludeFamilyChange(false);
+                    }}
+                    className="mr-2 h-4 w-4 rounded border-input"
+                  />
+                  <span className="text-sm text-muted-foreground">Show features (RF only)</span>
+                </label>
+              </>
             )}
           </div>
 
@@ -126,7 +152,8 @@ export function ScannerForm({
           <Info className="h-4 w-4 mt-0.5 flex-shrink-0" />
           <p>
             Enter a domain name or URL. The system will extract the domain and analyze it for DGA patterns.
-            High entropy, random characters, and unusual patterns indicate potential DGA activity.
+            With <strong>Family classification</strong> enabled, detected DGAs will be identified by malware family
+            (e.g., Conficker, Emotet) with threat intelligence.
           </p>
         </div>
       </CardContent>

@@ -1,4 +1,4 @@
-import { Cpu, CheckCircle, XCircle, ChevronRight, Brain, TreeDeciduous } from 'lucide-react';
+import { Cpu, CheckCircle, XCircle, ChevronRight, Brain, TreeDeciduous, Zap, TrendingUp, Sparkles, Languages } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -15,8 +15,11 @@ function getModelIcon(modelType: string) {
   const icons: Record<string, typeof Cpu> = {
     'random_forest': TreeDeciduous,
     'lstm': Brain,
+    'xgboost': Zap,
+    'gradient_boosting': TrendingUp,
+    'transformer': Sparkles,
+    'distilbert': Languages,
     'cnn': Cpu,
-    'transformer': Cpu,
   };
   return icons[modelType] || Cpu;
 }
@@ -26,8 +29,11 @@ function getModelDescription(modelType: string) {
   const descriptions: Record<string, string> = {
     'random_forest': 'Handcrafted features with ensemble decision trees',
     'lstm': 'Character-level deep learning with CNN-LSTM architecture',
+    'xgboost': 'Extreme gradient boosting with handcrafted features',
+    'gradient_boosting': 'Sklearn gradient boosting ensemble classifier',
+    'transformer': 'Custom character-level transformer with self-attention',
+    'distilbert': 'Fine-tuned DistilBERT pre-trained language model',
     'cnn': 'Convolutional neural network for pattern detection',
-    'transformer': 'Attention-based architecture for sequence analysis',
   };
   return descriptions[modelType] || 'Machine learning model for DGA detection';
 }

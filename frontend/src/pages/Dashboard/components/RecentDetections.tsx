@@ -21,15 +21,17 @@ export function RecentDetections({ detections }: RecentDetectionsProps) {
             detections.map((detection) => (
               <div
                 key={detection.id}
-                className={`flex items-center justify-between p-3 rounded-lg ${
-                  detection.is_dga ? 'bg-destructive/10' : 'bg-success-50'
+                className={`flex items-center justify-between p-3 rounded-lg border ${
+                  detection.is_dga
+                    ? 'bg-red-500/10 border-red-500/30 dark:bg-red-500/20 dark:border-red-500/40'
+                    : 'bg-green-500/10 border-green-500/30 dark:bg-green-500/20 dark:border-green-500/40'
                 }`}
               >
                 <div className="flex items-center">
                   {detection.is_dga ? (
-                    <AlertTriangle className="h-5 w-5 text-destructive mr-3" />
+                    <AlertTriangle className="h-5 w-5 text-red-600 dark:text-red-400 mr-3" />
                   ) : (
-                    <CheckCircle className="h-5 w-5 text-success-500 mr-3" />
+                    <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400 mr-3" />
                   )}
                   <div>
                     <p className="font-medium text-foreground">{detection.domain}</p>

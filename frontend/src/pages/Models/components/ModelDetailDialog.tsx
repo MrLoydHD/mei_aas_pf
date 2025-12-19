@@ -6,6 +6,7 @@ import {
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
@@ -49,40 +50,97 @@ export function ModelDetailDialog({ model, open, onOpenChange }: ModelDetailDial
   const metrics = model.metrics;
   const confusionMatrix = metrics?.confusion_matrix;
   const trainingHistory = metrics?.history;
+
+  // Model type categories
+  const neuralNetworkModels = ['lstm', 'transformer', 'distilbert'];
+  const treeBasedModels = ['random_forest', 'xgboost', 'gradient_boosting'];
+  const familyClassifierTypes = [
+    'family_classifier_rf', 'family_classifier_lstm', 'family_classifier_xgb',
+    'family_classifier_gb', 'family_classifier_transformer', 'family_classifier_distilbert'
+  ];
+
+  const isNeuralNetwork = neuralNetworkModels.includes(model.model_type);
+  const isTreeBased = treeBasedModels.includes(model.model_type);
+  const isFamilyClassifier = familyClassifierTypes.includes(model.model_type);
+
+  // For backwards compatibility
   const isLSTM = model.model_type === 'lstm';
   const isRandomForest = model.model_type === 'random_forest';
 
+  // Helper to safely get metric value (handles both binary and family classifier metric names)
+  const getMetricValue = (key: string): number => {
+    if (!metrics) return 0;
+    const m = metrics as unknown as Record<string, unknown>;
+    // For family classifiers, use macro metrics
+    if (isFamilyClassifier) {
+      const macroKey = `${key}_macro`;
+      return (m[macroKey] ?? m[key] ?? 0) as number;
+    }
+    return (m[key] ?? 0) as number;
+  };
+
   // Prepare metrics data for radar chart
-  const radarData = metrics ? [
+  const radarData = metrics ? (isFamilyClassifier ? [
+    { metric: 'Accuracy', value: getMetricValue('accuracy') * 100, fullMark: 100 },
+    { metric: 'Precision', value: getMetricValue('precision') * 100, fullMark: 100 },
+    { metric: 'Recall', value: getMetricValue('recall') * 100, fullMark: 100 },
+    { metric: 'F1 Score', value: getMetricValue('f1') * 100, fullMark: 100 },
+  ] : [
     { metric: 'Accuracy', value: metrics.accuracy * 100, fullMark: 100 },
     { metric: 'Precision', value: metrics.precision * 100, fullMark: 100 },
     { metric: 'Recall', value: metrics.recall * 100, fullMark: 100 },
     { metric: 'F1 Score', value: metrics.f1 * 100, fullMark: 100 },
     { metric: 'ROC-AUC', value: metrics.roc_auc * 100, fullMark: 100 },
-  ] : [];
+  ]) : [];
 
   // Prepare metrics data for bar chart
-  const metricsBarData = metrics ? [
+  const metricsBarData = metrics ? (isFamilyClassifier ? [
+    { name: 'Accuracy', value: getMetricValue('accuracy') * 100 },
+    { name: 'Precision', value: getMetricValue('precision') * 100 },
+    { name: 'Recall', value: getMetricValue('recall') * 100 },
+    { name: 'F1 Score', value: getMetricValue('f1') * 100 },
+  ] : [
     { name: 'Accuracy', value: metrics.accuracy * 100 },
     { name: 'Precision', value: metrics.precision * 100 },
     { name: 'Recall', value: metrics.recall * 100 },
     { name: 'F1 Score', value: metrics.f1 * 100 },
     { name: 'ROC-AUC', value: metrics.roc_auc * 100 },
-  ] : [];
+  ]) : [];
 
-  // Prepare confusion matrix data
-  const confusionData = confusionMatrix ? [
+  // Check if binary (2x2) or multi-class confusion matrix
+  const isBinaryMatrix = confusionMatrix && confusionMatrix.length === 2;
+
+  // Prepare confusion matrix data (only for binary classification)
+  const confusionData = (confusionMatrix && isBinaryMatrix) ? [
     { name: 'True Negative', value: confusionMatrix[0][0], type: 'correct' },
     { name: 'False Positive', value: confusionMatrix[0][1], type: 'error' },
     { name: 'False Negative', value: confusionMatrix[1][0], type: 'error' },
     { name: 'True Positive', value: confusionMatrix[1][1], type: 'correct' },
   ] : [];
 
-  // Prepare prediction distribution (TP, TN, FP, FN)
-  const predictionDistribution = confusionMatrix ? [
-    { name: 'Correct', value: confusionMatrix[0][0] + confusionMatrix[1][1] },
-    { name: 'Errors', value: confusionMatrix[0][1] + confusionMatrix[1][0] },
-  ] : [];
+  // Prepare prediction distribution - works for both binary and multi-class
+  const predictionDistribution = confusionMatrix ? (() => {
+    if (isBinaryMatrix) {
+      return [
+        { name: 'Correct', value: confusionMatrix[0][0] + confusionMatrix[1][1] },
+        { name: 'Errors', value: confusionMatrix[0][1] + confusionMatrix[1][0] },
+      ];
+    } else {
+      // Multi-class: sum diagonal for correct, everything else is errors
+      let correct = 0;
+      let total = 0;
+      for (let i = 0; i < confusionMatrix.length; i++) {
+        for (let j = 0; j < confusionMatrix[i].length; j++) {
+          total += confusionMatrix[i][j];
+          if (i === j) correct += confusionMatrix[i][j];
+        }
+      }
+      return [
+        { name: 'Correct', value: correct },
+        { name: 'Errors', value: total - correct },
+      ];
+    }
+  })() : [];
 
   // Feature importance data (top 15) - Random Forest only
   const featureData = model.feature_importance
@@ -108,8 +166,15 @@ export function ModelDetailDialog({ model, open, onOpenChange }: ModelDetailDial
     : [];
 
   // Determine which optional tabs should show
-  const showFeaturesTab = isRandomForest && model.feature_importance;
-  const showTrainingTab = isLSTM && trainingHistory;
+  // Tree-based models (RF, XGBoost, GB) have feature importance
+  const hasFeatureImportance = isTreeBased ||
+    ['family_classifier_rf', 'family_classifier_xgb', 'family_classifier_gb'].includes(model.model_type);
+  // Neural network models (LSTM, Transformer, DistilBERT) have training history
+  const hasTrainingHistory = isNeuralNetwork ||
+    ['family_classifier_lstm', 'family_classifier_transformer', 'family_classifier_distilbert'].includes(model.model_type);
+
+  const showFeaturesTab = hasFeatureImportance && model.feature_importance;
+  const showTrainingTab = hasTrainingHistory && trainingHistory;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -121,6 +186,11 @@ export function ModelDetailDialog({ model, open, onOpenChange }: ModelDetailDial
               {model.is_loaded ? 'Loaded' : 'Not Loaded'}
             </Badge>
           </DialogTitle>
+          <DialogDescription>
+            {isFamilyClassifier
+              ? 'Multi-class DGA family classification model performance metrics'
+              : 'Binary DGA detection model performance metrics'}
+          </DialogDescription>
         </DialogHeader>
 
         <Tabs defaultValue="overview" className="w-full">
@@ -128,10 +198,10 @@ export function ModelDetailDialog({ model, open, onOpenChange }: ModelDetailDial
             <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="confusion">Confusion Matrix</TabsTrigger>
             <TabsTrigger value="metrics">Metrics</TabsTrigger>
-            {isRandomForest && model.feature_importance && (
+            {showFeaturesTab && (
               <TabsTrigger value="features">Features</TabsTrigger>
             )}
-            {isLSTM && trainingHistory && (
+            {showTrainingTab && (
               <TabsTrigger value="training">Training</TabsTrigger>
             )}
           </TabsList>
@@ -220,27 +290,29 @@ export function ModelDetailDialog({ model, open, onOpenChange }: ModelDetailDial
                   <CardTitle className="text-sm">Model Summary</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-center">
+                  <div className={`grid grid-cols-2 ${isFamilyClassifier ? 'md:grid-cols-4' : 'md:grid-cols-5'} gap-4 text-center`}>
                     <div>
-                      <p className="text-2xl font-bold text-primary">{(metrics.accuracy * 100).toFixed(2)}%</p>
+                      <p className="text-2xl font-bold text-primary">{(getMetricValue('accuracy') * 100).toFixed(2)}%</p>
                       <p className="text-sm text-muted-foreground">Accuracy</p>
                     </div>
                     <div>
-                      <p className="text-2xl font-bold text-blue-500">{(metrics.precision * 100).toFixed(2)}%</p>
+                      <p className="text-2xl font-bold text-blue-500">{(getMetricValue('precision') * 100).toFixed(2)}%</p>
                       <p className="text-sm text-muted-foreground">Precision</p>
                     </div>
                     <div>
-                      <p className="text-2xl font-bold text-purple-500">{(metrics.recall * 100).toFixed(2)}%</p>
+                      <p className="text-2xl font-bold text-purple-500">{(getMetricValue('recall') * 100).toFixed(2)}%</p>
                       <p className="text-sm text-muted-foreground">Recall</p>
                     </div>
                     <div>
-                      <p className="text-2xl font-bold text-indigo-500">{(metrics.f1 * 100).toFixed(2)}%</p>
+                      <p className="text-2xl font-bold text-indigo-500">{(getMetricValue('f1') * 100).toFixed(2)}%</p>
                       <p className="text-sm text-muted-foreground">F1 Score</p>
                     </div>
-                    <div>
-                      <p className="text-2xl font-bold text-green-500">{(metrics.roc_auc * 100).toFixed(2)}%</p>
-                      <p className="text-sm text-muted-foreground">ROC-AUC</p>
-                    </div>
+                    {!isFamilyClassifier && (
+                      <div>
+                        <p className="text-2xl font-bold text-green-500">{(getMetricValue('roc_auc') * 100).toFixed(2)}%</p>
+                        <p className="text-sm text-muted-foreground">ROC-AUC</p>
+                      </div>
+                    )}
                   </div>
                 </CardContent>
               </Card>
@@ -253,10 +325,12 @@ export function ModelDetailDialog({ model, open, onOpenChange }: ModelDetailDial
               {/* Confusion Matrix Grid */}
               <Card>
                 <CardHeader>
-                  <CardTitle className="text-sm">Confusion Matrix</CardTitle>
+                  <CardTitle className="text-sm">
+                    {isFamilyClassifier ? 'Multi-Class Summary' : 'Confusion Matrix'}
+                  </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  {confusionMatrix && (
+                  {confusionMatrix && isBinaryMatrix && (
                     <div className="flex flex-col items-center">
                       <div className="mb-2 text-sm text-muted-foreground">Predicted</div>
                       <div className="flex">
@@ -310,47 +384,98 @@ export function ModelDetailDialog({ model, open, onOpenChange }: ModelDetailDial
                       </div>
                     </div>
                   )}
+                  {confusionMatrix && !isBinaryMatrix && (
+                    <div className="space-y-4">
+                      <p className="text-sm text-muted-foreground">
+                        {confusionMatrix.length}x{confusionMatrix.length} confusion matrix for {confusionMatrix.length} classes
+                      </p>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="p-4 rounded-lg bg-green-500/20 border-2 border-green-500 text-center">
+                          <p className="text-3xl font-bold">{predictionDistribution[0]?.value.toLocaleString()}</p>
+                          <p className="text-sm text-muted-foreground">Correct Predictions</p>
+                        </div>
+                        <div className="p-4 rounded-lg bg-red-500/20 border-2 border-red-500 text-center">
+                          <p className="text-3xl font-bold">{predictionDistribution[1]?.value.toLocaleString()}</p>
+                          <p className="text-sm text-muted-foreground">Misclassifications</p>
+                        </div>
+                      </div>
+                      <p className="text-xs text-muted-foreground text-center">
+                        Accuracy: {((predictionDistribution[0]?.value / (predictionDistribution[0]?.value + predictionDistribution[1]?.value)) * 100).toFixed(2)}%
+                      </p>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
 
-              {/* Confusion Bar Chart */}
+              {/* Confusion Bar Chart / Prediction Distribution */}
               <Card>
                 <CardHeader>
-                  <CardTitle className="text-sm">Confusion Breakdown</CardTitle>
+                  <CardTitle className="text-sm">
+                    {isBinaryMatrix ? 'Confusion Breakdown' : 'Prediction Distribution'}
+                  </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <ResponsiveContainer width="100%" height={300}>
-                    <BarChart data={confusionData} layout="vertical">
-                      <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} />
-                      <XAxis type="number" tick={{ fill: CHART_COLORS.text }} />
-                      <YAxis
-                        dataKey="name"
-                        type="category"
-                        width={100}
-                        tick={{ fill: CHART_COLORS.text, fontSize: 12 }}
-                      />
-                      <Tooltip
-                        formatter={(value: number) => [value.toLocaleString(), 'Count']}
-                        contentStyle={{
-                          backgroundColor: CHART_COLORS.background,
-                          border: `1px solid ${CHART_COLORS.border}`,
-                          borderRadius: '8px',
-                        }}
-                      />
-                      <Bar
-                        dataKey="value"
-                        fill={CHART_COLORS.primary}
-                        radius={[0, 4, 4, 0]}
-                      >
-                        {confusionData.map((entry, index) => (
-                          <Cell
-                            key={`cell-${index}`}
-                            fill={entry.type === 'correct' ? CHART_COLORS.success : CHART_COLORS.danger}
-                          />
-                        ))}
-                      </Bar>
-                    </BarChart>
-                  </ResponsiveContainer>
+                  {isBinaryMatrix ? (
+                    <ResponsiveContainer width="100%" height={300}>
+                      <BarChart data={confusionData} layout="vertical">
+                        <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} />
+                        <XAxis type="number" tick={{ fill: CHART_COLORS.text }} />
+                        <YAxis
+                          dataKey="name"
+                          type="category"
+                          width={100}
+                          tick={{ fill: CHART_COLORS.text, fontSize: 12 }}
+                        />
+                        <Tooltip
+                          formatter={(value: number) => [value.toLocaleString(), 'Count']}
+                          contentStyle={{
+                            backgroundColor: CHART_COLORS.background,
+                            border: `1px solid ${CHART_COLORS.border}`,
+                            borderRadius: '8px',
+                          }}
+                        />
+                        <Bar
+                          dataKey="value"
+                          fill={CHART_COLORS.primary}
+                          radius={[0, 4, 4, 0]}
+                        >
+                          {confusionData.map((entry, index) => (
+                            <Cell
+                              key={`cell-${index}`}
+                              fill={entry.type === 'correct' ? CHART_COLORS.success : CHART_COLORS.danger}
+                            />
+                          ))}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <ResponsiveContainer width="100%" height={300}>
+                      <PieChart>
+                        <Pie
+                          data={predictionDistribution}
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={60}
+                          outerRadius={100}
+                          paddingAngle={5}
+                          dataKey="value"
+                          label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(1)}%`}
+                        >
+                          <Cell fill={CHART_COLORS.success} />
+                          <Cell fill={CHART_COLORS.danger} />
+                        </Pie>
+                        <Tooltip
+                          formatter={(value: number) => [value.toLocaleString(), 'Count']}
+                          contentStyle={{
+                            backgroundColor: CHART_COLORS.background,
+                            border: `1px solid ${CHART_COLORS.border}`,
+                            borderRadius: '8px',
+                          }}
+                        />
+                        <Legend />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  )}
                 </CardContent>
               </Card>
             </div>
@@ -400,9 +525,9 @@ export function ModelDetailDialog({ model, open, onOpenChange }: ModelDetailDial
                   <CardTitle className="text-sm">Classification Report</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="overflow-x-auto">
+                  <div className="overflow-x-auto max-h-96">
                     <table className="w-full text-sm">
-                      <thead>
+                      <thead className="sticky top-0 bg-card">
                         <tr className="border-b">
                           <th className="text-left py-2">Class</th>
                           <th className="text-right py-2">Precision</th>
@@ -414,15 +539,22 @@ export function ModelDetailDialog({ model, open, onOpenChange }: ModelDetailDial
                       <tbody>
                         {Object.entries(metrics.classification_report)
                           .filter(([key]) => !['accuracy', 'macro avg', 'weighted avg'].includes(key))
-                          .map(([className, values]) => (
-                            <tr key={className} className="border-b">
-                              <td className="py-2">{className === '0' ? 'Legitimate' : 'DGA'}</td>
-                              <td className="text-right">{(values.precision * 100).toFixed(2)}%</td>
-                              <td className="text-right">{(values.recall * 100).toFixed(2)}%</td>
-                              <td className="text-right">{(values['f1-score'] * 100).toFixed(2)}%</td>
-                              <td className="text-right">{values.support}</td>
-                            </tr>
-                          ))}
+                          .map(([className, values]) => {
+                            // For binary classification: 0 = Legitimate, 1 = DGA
+                            // For family classifiers: className is the family name
+                            const displayName = isFamilyClassifier
+                              ? className.charAt(0).toUpperCase() + className.slice(1)
+                              : className === '0' ? 'Legitimate' : 'DGA';
+                            return (
+                              <tr key={className} className="border-b hover:bg-muted/50">
+                                <td className="py-2 font-medium">{displayName}</td>
+                                <td className="text-right">{(values.precision * 100).toFixed(2)}%</td>
+                                <td className="text-right">{(values.recall * 100).toFixed(2)}%</td>
+                                <td className="text-right">{(values['f1-score'] * 100).toFixed(2)}%</td>
+                                <td className="text-right">{values.support.toLocaleString()}</td>
+                              </tr>
+                            );
+                          })}
                       </tbody>
                     </table>
                   </div>
@@ -431,8 +563,8 @@ export function ModelDetailDialog({ model, open, onOpenChange }: ModelDetailDial
             )}
           </TabsContent>
 
-          {/* Features Tab - Random Forest Only */}
-          {isRandomForest && model.feature_importance && (
+          {/* Features Tab - Random Forest & Family RF */}
+          {showFeaturesTab && (
             <TabsContent value="features" className="space-y-4">
               <Card>
                 <CardHeader>
@@ -503,8 +635,8 @@ export function ModelDetailDialog({ model, open, onOpenChange }: ModelDetailDial
             </TabsContent>
           )}
 
-          {/* Training Tab - LSTM Only */}
-          {isLSTM && trainingHistory && (
+          {/* Training Tab - LSTM & Family LSTM */}
+          {showTrainingTab && (
             <TabsContent value="training" className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {/* Loss Chart */}
@@ -606,30 +738,72 @@ export function ModelDetailDialog({ model, open, onOpenChange }: ModelDetailDial
                 </Card>
               </div>
 
-              {/* LSTM Architecture Info */}
+              {/* Model Architecture Info */}
               <Card>
                 <CardHeader>
                   <CardTitle className="text-sm">Model Architecture</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                    <div className="p-3 rounded-lg bg-muted/50">
-                      <p className="font-medium">Embedding</p>
-                      <p className="text-muted-foreground text-xs">Character-level embeddings</p>
+                  {(model.model_type === 'lstm' || model.model_type === 'family_classifier_lstm') && (
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                      <div className="p-3 rounded-lg bg-muted/50">
+                        <p className="font-medium">Embedding</p>
+                        <p className="text-muted-foreground text-xs">Character-level embeddings</p>
+                      </div>
+                      <div className="p-3 rounded-lg bg-muted/50">
+                        <p className="font-medium">Conv1D</p>
+                        <p className="text-muted-foreground text-xs">Local pattern detection</p>
+                      </div>
+                      <div className="p-3 rounded-lg bg-muted/50">
+                        <p className="font-medium">Bidirectional LSTM</p>
+                        <p className="text-muted-foreground text-xs">Sequential pattern learning</p>
+                      </div>
+                      <div className="p-3 rounded-lg bg-muted/50">
+                        <p className="font-medium">Dense + Dropout</p>
+                        <p className="text-muted-foreground text-xs">Classification with regularization</p>
+                      </div>
                     </div>
-                    <div className="p-3 rounded-lg bg-muted/50">
-                      <p className="font-medium">Conv1D</p>
-                      <p className="text-muted-foreground text-xs">Local pattern detection</p>
+                  )}
+                  {(model.model_type === 'transformer' || model.model_type === 'family_classifier_transformer') && (
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                      <div className="p-3 rounded-lg bg-muted/50">
+                        <p className="font-medium">Embedding</p>
+                        <p className="text-muted-foreground text-xs">Character-level embeddings</p>
+                      </div>
+                      <div className="p-3 rounded-lg bg-muted/50">
+                        <p className="font-medium">Positional Encoding</p>
+                        <p className="text-muted-foreground text-xs">Sinusoidal position info</p>
+                      </div>
+                      <div className="p-3 rounded-lg bg-muted/50">
+                        <p className="font-medium">Multi-Head Attention</p>
+                        <p className="text-muted-foreground text-xs">Self-attention mechanism</p>
+                      </div>
+                      <div className="p-3 rounded-lg bg-muted/50">
+                        <p className="font-medium">Feed-Forward</p>
+                        <p className="text-muted-foreground text-xs">Dense layers with GELU</p>
+                      </div>
                     </div>
-                    <div className="p-3 rounded-lg bg-muted/50">
-                      <p className="font-medium">Bidirectional LSTM</p>
-                      <p className="text-muted-foreground text-xs">Sequential pattern learning</p>
+                  )}
+                  {(model.model_type === 'distilbert' || model.model_type === 'family_classifier_distilbert') && (
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                      <div className="p-3 rounded-lg bg-muted/50">
+                        <p className="font-medium">WordPiece</p>
+                        <p className="text-muted-foreground text-xs">Subword tokenization</p>
+                      </div>
+                      <div className="p-3 rounded-lg bg-muted/50">
+                        <p className="font-medium">DistilBERT Base</p>
+                        <p className="text-muted-foreground text-xs">6-layer transformer</p>
+                      </div>
+                      <div className="p-3 rounded-lg bg-muted/50">
+                        <p className="font-medium">Fine-Tuning</p>
+                        <p className="text-muted-foreground text-xs">Pre-trained on large corpus</p>
+                      </div>
+                      <div className="p-3 rounded-lg bg-muted/50">
+                        <p className="font-medium">Classification Head</p>
+                        <p className="text-muted-foreground text-xs">Task-specific output</p>
+                      </div>
                     </div>
-                    <div className="p-3 rounded-lg bg-muted/50">
-                      <p className="font-medium">Dense + Dropout</p>
-                      <p className="text-muted-foreground text-xs">Classification with regularization</p>
-                    </div>
-                  </div>
+                  )}
                 </CardContent>
               </Card>
 
