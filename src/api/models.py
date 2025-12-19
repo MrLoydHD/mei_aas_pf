@@ -19,6 +19,28 @@ class DomainRequest(BaseModel):
         }
 
 
+class FamilyInfo(BaseModel):
+    """Information about a DGA family."""
+    family: str
+    confidence: float = Field(..., ge=0, le=1)
+    description: str
+    threat_level: str
+    first_seen: str
+    malware_type: str
+    alternatives: List[Dict[str, Any]] = []
+
+
+class FamilyPredictionResponse(BaseModel):
+    """Response model for family classification."""
+    domain: str
+    is_dga: bool
+    dga_confidence: float = Field(..., ge=0, le=1)
+    family_info: Optional[FamilyInfo] = None
+    model_used: str
+    family_model_used: Optional[str] = None
+    timestamp: datetime
+
+
 class BatchDomainRequest(BaseModel):
     """Request model for batch domain prediction."""
     domains: List[str] = Field(..., min_length=1, max_length=1000, description="List of domains to analyze")

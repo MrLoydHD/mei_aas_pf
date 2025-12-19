@@ -53,6 +53,10 @@ class DetectionRecord(Base):
     confidence = Column(Float, nullable=False)
     dga_probability = Column(Float, nullable=False)
     model_used = Column(String(50), nullable=False)
+    # Family classification fields
+    family = Column(String(50), nullable=True, index=True)
+    family_confidence = Column(Float, nullable=True)
+    threat_level = Column(String(20), nullable=True)
     source = Column(String(100), nullable=True)  # e.g., "extension", "api", "dashboard"
     user_agent = Column(String(500), nullable=True)
     ip_address = Column(String(45), nullable=True)
@@ -95,7 +99,10 @@ class DetectionRepository:
         source: Optional[str] = None,
         user_agent: Optional[str] = None,
         ip_address: Optional[str] = None,
-        user_id: Optional[int] = None
+        user_id: Optional[int] = None,
+        family: Optional[str] = None,
+        family_confidence: Optional[float] = None,
+        threat_level: Optional[str] = None
     ) -> DetectionRecord:
         """Create a new detection record."""
         record = DetectionRecord(
@@ -107,7 +114,10 @@ class DetectionRepository:
             source=source,
             user_agent=user_agent,
             ip_address=ip_address,
-            user_id=user_id
+            user_id=user_id,
+            family=family,
+            family_confidence=family_confidence,
+            threat_level=threat_level
         )
         self.db.add(record)
         self.db.commit()
@@ -214,6 +224,47 @@ class DetectionRepository:
             .order_by(DetectionRecord.timestamp.desc())\
             .limit(limit)\
             .all()
+
+    def get_family_stats(self) -> List[dict]:
+        """Get detection statistics by DGA family."""
+        from sqlalchemy import func
+
+        results = self.db.query(
+            DetectionRecord.family,
+            func.count(DetectionRecord.id).label('count'),
+            func.avg(DetectionRecord.family_confidence).label('avg_confidence'),
+            DetectionRecord.threat_level
+        ).filter(
+            DetectionRecord.is_dga == True,
+            DetectionRecord.family.isnot(None)
+        ).group_by(DetectionRecord.family, DetectionRecord.threat_level)\
+         .order_by(func.count(DetectionRecord.id).desc())\
+         .all()
+
+        return [
+            {
+                'family': r.family,
+                'count': r.count,
+                'avg_confidence': round(r.avg_confidence, 4) if r.avg_confidence else 0,
+                'threat_level': r.threat_level
+            }
+            for r in results
+        ]
+
+    def get_threat_level_distribution(self) -> dict:
+        """Get distribution of detected DGAs by threat level."""
+        from sqlalchemy import func
+
+        results = self.db.query(
+            DetectionRecord.threat_level,
+            func.count(DetectionRecord.id).label('count')
+        ).filter(
+            DetectionRecord.is_dga == True,
+            DetectionRecord.threat_level.isnot(None)
+        ).group_by(DetectionRecord.threat_level)\
+         .all()
+
+        return {r.threat_level: r.count for r in results}
 
 
 class UserRepository:
