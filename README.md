@@ -19,7 +19,8 @@ The system detects domains generated algorithmically by botnets and command-and-
 - Chrome browser extension for real-time protection
 
 **Authors:**
-* Hugo Correia
+* Hugo Correia - 108215
+* Joaquim Rosa - 109089
 
 ## Architecture
 
