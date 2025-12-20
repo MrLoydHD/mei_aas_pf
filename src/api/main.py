@@ -307,60 +307,45 @@ def get_active_model(model_type: str = "auto"):
             raise HTTPException(status_code=503, detail="No models available")
 
 
-# Known dynamic DNS / free hosting services where the subdomain is the interesting part
-DDNS_PROVIDERS = {
-    # No-IP services
-    'ddns.net', 'no-ip.org', 'no-ip.biz', 'no-ip.info', 'no-ip.com',
-    'hopto.org', 'zapto.org', 'sytes.net', 'redirectme.net', 'bounceme.net',
-    'myftp.biz', 'myftp.org', 'myvnc.com', 'serveftp.com', 'servegame.com',
-    'servehttp.com', 'servequake.com',
-    # DynDNS
-    'dyndns.org', 'dyndns.info', 'dyndns.tv', 'dyndns.biz',
-    'dnsalias.com', 'dnsalias.net', 'dnsalias.org',
-    # DuckDNS
-    'duckdns.org',
-    # Dynu
-    'dynu.com', 'dynu.net',
-    # FreeDNS / Afraid.org
-    'afraid.org', 'freedns.afraid.org', 'mooo.com', 'chickenkiller.com',
-    # Other popular DDNS
-    'changeip.com', 'changeip.net', 'changeip.org',
-    'dns.army', 'dns.navy', 'dns2go.com',
-    'dnsdojo.com', 'dnsdojo.net', 'dnsdojo.org',
-    'doesntexist.com', 'doesntexist.org',
-    'doomdns.com', 'doomdns.org',
-    'dvrdns.org', 'dynalias.com', 'dynalias.net', 'dynalias.org',
-    'gotdns.com', 'gotdns.org',
-    'selfip.com', 'selfip.net', 'selfip.org',
-    'webhop.net', 'webhop.org', 'webhop.biz',
-    'ydns.eu', 'yi.org',
-    # Cloud/hosting providers often abused
-    'cloudns.cc', 'cloudns.net',
-    # Other
-    '3utilities.com', 'blogsyte.com', 'brasilia.me', 'cable-modem.org',
-    'ciscofreak.com', 'collegefan.org', 'couchpotatofries.org',
-    'damnserver.com', 'ddns.info', 'ddns.mobi', 'ddns.name',
-    'ddnsking.com', 'ditchyourip.com',
-    'etowns.net', 'etowns.org',
-    'game-host.org', 'game-server.cc',
-    'getmyip.com', 'giize.com', 'gleeze.com',
-    'homeftp.net', 'homeftp.org', 'homeip.net', 'homelinux.com',
-    'homelinux.net', 'homelinux.org', 'homeunix.com', 'homeunix.net',
-    'homeunix.org', 'iownyour.biz', 'iownyour.org',
-    'is-a-chef.com', 'is-a-geek.com', 'is-a-geek.net', 'is-a-geek.org',
-    'kicks-ass.net', 'kicks-ass.org', 'misconfused.org',
-    'mypets.ws', 'myphotos.cc', 'neat-url.com',
-    'office-on-the.net', 'podzone.net', 'podzone.org',
-    'privatedns.org', 'privatizehealthinsurance.net',
-    'scrapping.cc', 'selfip.biz', 'sellsyourhome.org',
-    'servebbs.com', 'servebbs.net', 'servebbs.org',
-    'servecounterstrike.com', 'serveftp.net', 'serveftp.org',
-    'serveirc.com', 'serveminecraft.net', 'servepics.com',
-    'shacknet.nu', 'trickip.net', 'trickip.org',
-    'vicp.cc', 'vicp.net', 'vpndns.net',
-    'wikaba.com', 'xicp.cn', 'xicp.net',
-    'yombo.me', 'yourtrap.com', 'zaizheli.net',
-}
+def load_ddns_providers() -> set:
+    """
+    Load dynamic DNS provider domains from CSV file.
+    Falls back to a minimal hardcoded set if file not found.
+    Source: https://github.com/alexandrosmagos/dyn-dns-list
+    """
+    ddns_csv_path = os.getenv("DDNS_CSV_PATH", "data/raw/ddns_links.csv")
+    providers = set()
+
+    if os.path.exists(ddns_csv_path):
+        try:
+            import csv
+            with open(ddns_csv_path, 'r') as f:
+                reader = csv.DictReader(f)
+                for row in reader:
+                    domain = row.get('Domain', '').strip().lower()
+                    if domain:
+                        providers.add(domain)
+            print(f"Loaded {len(providers)} DDNS providers from {ddns_csv_path}")
+        except Exception as e:
+            print(f"Error loading DDNS providers from CSV: {e}")
+
+    # Fallback: add essential DDNS providers if CSV failed or was empty
+    if len(providers) < 100:
+        essential_providers = {
+            'ddns.net', 'no-ip.org', 'no-ip.biz', 'no-ip.com',
+            'hopto.org', 'zapto.org', 'sytes.net', 'dyndns.org',
+            'duckdns.org', 'dynu.com', 'mooo.com', 'chickenkiller.com',
+            'freedns.afraid.org', 'cloudns.net', 'serveftp.com',
+        }
+        providers.update(essential_providers)
+        if len(providers) == len(essential_providers):
+            print(f"Using {len(providers)} fallback DDNS providers")
+
+    return providers
+
+
+# Load DDNS providers at module load time
+DDNS_PROVIDERS = load_ddns_providers()
 
 
 def extract_domain_from_url(url_or_domain: str, strip_tld: bool = True) -> str:
