@@ -1,6 +1,6 @@
 """
 DistilBERT-based model for DGA detection.
-Uses pre-trained DistilBERT fine-tuned for binary classification.
+Uses pre-trained DistilBERT fine-tuned for binary classification (PyTorch).
 """
 
 import os
@@ -8,10 +8,20 @@ from typing import Dict, List, Optional, Tuple, Any
 
 import numpy as np
 
-# Suppress TensorFlow warnings
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
+# PyTorch imports
+try:
+    import torch
+    import torch.nn as nn
+    from torch.utils.data import DataLoader, TensorDataset
+    from transformers import (
+        DistilBertTokenizer,
+        DistilBertForSequenceClassification,
+        get_linear_schedule_with_warmup
+    )
+    TRANSFORMERS_AVAILABLE = True
+except ImportError:
+    TRANSFORMERS_AVAILABLE = False
 
-import tensorflow as tf
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import (
     accuracy_score,
@@ -23,21 +33,10 @@ from sklearn.metrics import (
     roc_auc_score
 )
 
-# HuggingFace Transformers imports
-try:
-    from transformers import (
-        DistilBertTokenizer,
-        TFDistilBertForSequenceClassification,
-        DistilBertConfig
-    )
-    TRANSFORMERS_AVAILABLE = True
-except ImportError:
-    TRANSFORMERS_AVAILABLE = False
-
 
 class DistilBERTDGADetector:
     """
-    DistilBERT-based DGA detector using pre-trained language model.
+    DistilBERT-based DGA detector using pre-trained language model (PyTorch).
 
     This model fine-tunes a pre-trained DistilBERT model for binary
     domain classification. DistilBERT is a smaller, faster version
@@ -60,8 +59,8 @@ class DistilBERTDGADetector:
         """
         if not TRANSFORMERS_AVAILABLE:
             raise ImportError(
-                "HuggingFace Transformers not installed. "
-                "Install with: pip install transformers"
+                "HuggingFace Transformers or PyTorch not installed. "
+                "Install with: pip install transformers torch"
             )
 
         self.max_length = max_length
@@ -69,30 +68,25 @@ class DistilBERTDGADetector:
         self.model_name = model_name
 
         self.tokenizer: Optional[DistilBertTokenizer] = None
-        self.model: Optional[TFDistilBertForSequenceClassification] = None
+        self.model: Optional[DistilBertForSequenceClassification] = None
+        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.is_trained = False
         self.metrics: Dict[str, Any] = {}
-        self.history: Optional[Any] = None
+        self.history: Dict[str, List[float]] = {'loss': [], 'val_loss': [], 'accuracy': [], 'val_accuracy': []}
 
     def _load_pretrained(self) -> None:
         """Load pre-trained tokenizer and model."""
         print(f"Loading pre-trained {self.model_name}...")
+        print(f"Using device: {self.device}")
+
         self.tokenizer = DistilBertTokenizer.from_pretrained(self.model_name)
-
-        # Configure for binary classification
-        config = DistilBertConfig.from_pretrained(
+        self.model = DistilBertForSequenceClassification.from_pretrained(
             self.model_name,
-            num_labels=2,
-            output_hidden_states=False,
-            output_attentions=False
+            num_labels=2
         )
+        self.model.to(self.device)
 
-        self.model = TFDistilBertForSequenceClassification.from_pretrained(
-            self.model_name,
-            config=config
-        )
-
-    def tokenize_domains(self, domains: List[str]) -> Dict[str, tf.Tensor]:
+    def tokenize_domains(self, domains: List[str]) -> Dict[str, torch.Tensor]:
         """
         Tokenize domain names for DistilBERT.
 
@@ -106,7 +100,6 @@ class DistilBERTDGADetector:
             raise RuntimeError("Tokenizer not loaded. Call _load_pretrained() first.")
 
         # Add spaces between characters for better tokenization
-        # This helps BERT-based models handle domain-like text
         spaced_domains = [' '.join(list(d.lower())) for d in domains]
 
         encoded = self.tokenizer(
@@ -114,7 +107,7 @@ class DistilBERTDGADetector:
             max_length=self.max_length,
             padding='max_length',
             truncation=True,
-            return_tensors='tf'
+            return_tensors='pt'
         )
 
         return {
@@ -126,7 +119,7 @@ class DistilBERTDGADetector:
         self,
         dga_domains: List[str],
         legit_domains: List[str]
-    ) -> Tuple[Dict[str, tf.Tensor], np.ndarray]:
+    ) -> Tuple[Dict[str, torch.Tensor], np.ndarray]:
         """
         Prepare tokenized data and labels.
 
@@ -148,7 +141,7 @@ class DistilBERTDGADetector:
 
     def train(
         self,
-        X: Dict[str, tf.Tensor],
+        X: Dict[str, torch.Tensor],
         y: np.ndarray,
         test_size: float = 0.2,
         epochs: int = 3,
@@ -175,69 +168,111 @@ class DistilBERTDGADetector:
             indices, test_size=test_size, random_state=42, stratify=y
         )
 
-        # Split data
-        X_train = {
-            'input_ids': tf.gather(X['input_ids'], train_idx),
-            'attention_mask': tf.gather(X['attention_mask'], train_idx)
-        }
-        X_test = {
-            'input_ids': tf.gather(X['input_ids'], test_idx),
-            'attention_mask': tf.gather(X['attention_mask'], test_idx)
-        }
-        y_train = y[train_idx]
-        y_test = y[test_idx]
+        # Create datasets
+        train_dataset = TensorDataset(
+            X['input_ids'][train_idx],
+            X['attention_mask'][train_idx],
+            torch.tensor(y[train_idx], dtype=torch.long)
+        )
+        test_dataset = TensorDataset(
+            X['input_ids'][test_idx],
+            X['attention_mask'][test_idx],
+            torch.tensor(y[test_idx], dtype=torch.long)
+        )
+
+        train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+        test_loader = DataLoader(test_dataset, batch_size=batch_size)
 
         # Load model if not already loaded
         if self.model is None:
             self._load_pretrained()
 
-        # Compile model
-        optimizer = tf.keras.optimizers.Adam(learning_rate=self.learning_rate)
-        loss = tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True)
-
-        self.model.compile(
-            optimizer=optimizer,
-            loss=loss,
-            metrics=['accuracy']
+        # Optimizer and scheduler
+        optimizer = torch.optim.AdamW(self.model.parameters(), lr=self.learning_rate)
+        total_steps = len(train_loader) * epochs
+        scheduler = get_linear_schedule_with_warmup(
+            optimizer,
+            num_warmup_steps=total_steps // 10,
+            num_training_steps=total_steps
         )
 
-        print(f"\nFine-tuning on {len(y_train)} samples...")
+        print(f"\nFine-tuning on {len(train_idx)} samples...")
 
-        # Create TF datasets
-        train_dataset = tf.data.Dataset.from_tensor_slices((
-            {'input_ids': X_train['input_ids'], 'attention_mask': X_train['attention_mask']},
-            y_train
-        )).shuffle(len(y_train)).batch(batch_size)
+        best_val_loss = float('inf')
+        patience = 2
+        patience_counter = 0
 
-        val_dataset = tf.data.Dataset.from_tensor_slices((
-            {'input_ids': X_test['input_ids'], 'attention_mask': X_test['attention_mask']},
-            y_test
-        )).batch(batch_size)
+        for epoch in range(epochs):
+            # Training
+            self.model.train()
+            total_loss = 0
+            correct = 0
+            total = 0
 
-        # Training callbacks
-        callbacks = [
-            tf.keras.callbacks.EarlyStopping(
-                monitor='val_loss',
-                patience=2,
-                restore_best_weights=True,
-                verbose=1
-            )
-        ]
+            for batch in train_loader:
+                input_ids, attention_mask, labels = [b.to(self.device) for b in batch]
 
-        # Train
-        self.history = self.model.fit(
-            train_dataset,
-            validation_data=val_dataset,
-            epochs=epochs,
-            callbacks=callbacks,
-            verbose=1
-        )
+                optimizer.zero_grad()
+                outputs = self.model(input_ids=input_ids, attention_mask=attention_mask, labels=labels)
+                loss = outputs.loss
+                loss.backward()
+
+                torch.nn.utils.clip_grad_norm_(self.model.parameters(), 1.0)
+                optimizer.step()
+                scheduler.step()
+
+                total_loss += loss.item()
+                preds = torch.argmax(outputs.logits, dim=1)
+                correct += (preds == labels).sum().item()
+                total += labels.size(0)
+
+            avg_train_loss = total_loss / len(train_loader)
+            train_acc = correct / total
+            self.history['loss'].append(avg_train_loss)
+            self.history['accuracy'].append(train_acc)
+
+            # Validation
+            self.model.eval()
+            val_loss = 0
+            val_correct = 0
+            val_total = 0
+
+            with torch.no_grad():
+                for batch in test_loader:
+                    input_ids, attention_mask, labels = [b.to(self.device) for b in batch]
+                    outputs = self.model(input_ids=input_ids, attention_mask=attention_mask, labels=labels)
+                    val_loss += outputs.loss.item()
+                    preds = torch.argmax(outputs.logits, dim=1)
+                    val_correct += (preds == labels).sum().item()
+                    val_total += labels.size(0)
+
+            avg_val_loss = val_loss / len(test_loader)
+            val_acc = val_correct / val_total
+            self.history['val_loss'].append(avg_val_loss)
+            self.history['val_accuracy'].append(val_acc)
+
+            print(f"Epoch {epoch + 1}/{epochs} - "
+                  f"loss: {avg_train_loss:.4f} - acc: {train_acc:.4f} - "
+                  f"val_loss: {avg_val_loss:.4f} - val_acc: {val_acc:.4f}")
+
+            # Early stopping
+            if avg_val_loss < best_val_loss:
+                best_val_loss = avg_val_loss
+                patience_counter = 0
+            else:
+                patience_counter += 1
+                if patience_counter >= patience:
+                    print(f"Early stopping at epoch {epoch + 1}")
+                    break
 
         self.is_trained = True
 
         # Evaluate
         print("\nEvaluating model...")
-        self.metrics = self.evaluate(X_test, y_test)
+        self.metrics = self.evaluate(
+            {'input_ids': X['input_ids'][test_idx], 'attention_mask': X['attention_mask'][test_idx]},
+            y[test_idx]
+        )
 
         print(f"\nResults:")
         print(f"  Accuracy: {self.metrics['accuracy']:.4f}")
@@ -248,7 +283,7 @@ class DistilBERTDGADetector:
 
         return self.metrics
 
-    def evaluate(self, X: Dict[str, tf.Tensor], y: np.ndarray) -> Dict[str, Any]:
+    def evaluate(self, X: Dict[str, torch.Tensor], y: np.ndarray) -> Dict[str, Any]:
         """
         Evaluate the model on test data.
 
@@ -259,13 +294,21 @@ class DistilBERTDGADetector:
         Returns:
             Dictionary of evaluation metrics
         """
-        # Get predictions
-        outputs = self.model.predict(X, verbose=0)
-        logits = outputs.logits
+        self.model.eval()
 
-        # Convert to probabilities
-        probs = tf.nn.softmax(logits, axis=-1).numpy()
-        y_prob = probs[:, 1]  # Probability of DGA class
+        dataset = TensorDataset(X['input_ids'], X['attention_mask'])
+        loader = DataLoader(dataset, batch_size=32)
+
+        all_probs = []
+        with torch.no_grad():
+            for batch in loader:
+                input_ids, attention_mask = [b.to(self.device) for b in batch]
+                outputs = self.model(input_ids=input_ids, attention_mask=attention_mask)
+                probs = torch.softmax(outputs.logits, dim=-1)
+                all_probs.append(probs.cpu().numpy())
+
+        probs = np.vstack(all_probs)
+        y_prob = probs[:, 1]
         y_pred = np.argmax(probs, axis=1)
 
         return {
@@ -291,9 +334,14 @@ class DistilBERTDGADetector:
         if not self.is_trained:
             raise RuntimeError("Model must be trained before prediction")
 
+        self.model.eval()
         tokenized = self.tokenize_domains([domain])
-        outputs = self.model.predict(tokenized, verbose=0)
-        probs = tf.nn.softmax(outputs.logits, axis=-1).numpy()[0]
+
+        with torch.no_grad():
+            input_ids = tokenized['input_ids'].to(self.device)
+            attention_mask = tokenized['attention_mask'].to(self.device)
+            outputs = self.model(input_ids=input_ids, attention_mask=attention_mask)
+            probs = torch.softmax(outputs.logits, dim=-1).cpu().numpy()[0]
 
         is_dga = probs[1] > probs[0]
         confidence = float(probs[1] if is_dga else probs[0])
@@ -319,9 +367,21 @@ class DistilBERTDGADetector:
         if not self.is_trained:
             raise RuntimeError("Model must be trained before prediction")
 
+        self.model.eval()
         tokenized = self.tokenize_domains(domains)
-        outputs = self.model.predict(tokenized, verbose=0)
-        probs = tf.nn.softmax(outputs.logits, axis=-1).numpy()
+
+        dataset = TensorDataset(tokenized['input_ids'], tokenized['attention_mask'])
+        loader = DataLoader(dataset, batch_size=32)
+
+        all_probs = []
+        with torch.no_grad():
+            for batch in loader:
+                input_ids, attention_mask = [b.to(self.device) for b in batch]
+                outputs = self.model(input_ids=input_ids, attention_mask=attention_mask)
+                probs = torch.softmax(outputs.logits, dim=-1)
+                all_probs.append(probs.cpu().numpy())
+
+        probs = np.vstack(all_probs)
 
         results = []
         for i, domain in enumerate(domains):
@@ -339,9 +399,7 @@ class DistilBERTDGADetector:
 
     def get_training_history(self) -> Dict[str, List[float]]:
         """Get training history metrics."""
-        if self.history is None:
-            return {}
-        return self.history.history
+        return self.history
 
     def save(self, path: str) -> None:
         """
@@ -366,7 +424,7 @@ class DistilBERTDGADetector:
             'learning_rate': self.learning_rate,
             'model_name': self.model_name,
             'metrics': self.metrics,
-            'history': self.get_training_history()
+            'history': self.history
         }
 
         with open(os.path.join(path, 'metadata.json'), 'w') as f:
@@ -387,9 +445,10 @@ class DistilBERTDGADetector:
         self.tokenizer = DistilBertTokenizer.from_pretrained(
             os.path.join(path, 'tokenizer')
         )
-        self.model = TFDistilBertForSequenceClassification.from_pretrained(
+        self.model = DistilBertForSequenceClassification.from_pretrained(
             os.path.join(path, 'model')
         )
+        self.model.to(self.device)
 
         # Load metadata
         with open(os.path.join(path, 'metadata.json'), 'r') as f:
@@ -400,9 +459,8 @@ class DistilBERTDGADetector:
         self.model_name = metadata['model_name']
         self.metrics = metadata['metrics']
 
-        # Load training history if available
         if 'history' in metadata:
-            self.metrics['history'] = metadata['history']
+            self.history = metadata['history']
 
         self.is_trained = True
         print(f"Model loaded from {path}")

@@ -13,10 +13,14 @@ This repository contains a full-stack **Domain Generation Algorithm (DGA) Detect
 The system detects domains generated algorithmically by botnets and command-and-control (C2) servers, distinguishing between legitimate domain names and random/algorithmic ones using machine learning.
 
 **Features:**
-- Two ML models: Random Forest (interpretable) and LSTM (deep learning)
-- FastAPI REST backend for real-time predictions
+- **6 ML Models**: Random Forest, LSTM, XGBoost, Gradient Boosting, Transformer, DistilBERT
+- **Family Classification**: Identify 25 DGA malware families with threat intelligence
+- **Ensemble Voting**: Weighted voting based on model accuracy for higher confidence
+- FastAPI REST backend with Prometheus metrics
 - React dashboard for visualization and analysis
 - Chrome browser extension for real-time protection
+- **Monitoring**: Prometheus + Grafana for metrics and dashboards
+- **Load Testing**: k6 scripts for performance validation
 
 **Authors:**
 * Hugo Correia - 108215
@@ -45,15 +49,32 @@ The system detects domains generated algorithmically by botnets and command-and-
 │                   FastAPI Backend                            │
 │  - /predict - Single domain classification                  │
 │  - /predict/batch - Batch classification                    │
-│  - /stats - Detection statistics                            │
-│  - /models - Model information                              │
-└──────────────────────────┬──────────────────────────────────┘
-                           │
+│  - /predict/family - Family classification                  │
+│  - /metrics - Prometheus metrics                            │
+└────────────┬─────────────────────────────────┬──────────────┘
+             │                                 │
+             ▼                                 ▼
+┌────────────────────────────┐   ┌────────────────────────────┐
+│     Binary Detection       │   │   Family Classification    │
+│  ┌────────┐ ┌────────┐    │   │  ┌────────┐ ┌────────┐    │
+│  │   RF   │ │  LSTM  │    │   │  │   RF   │ │  LSTM  │    │
+│  └────────┘ └────────┘    │   │  └────────┘ └────────┘    │
+│  ┌────────┐ ┌────────┐    │   │  ┌────────┐ ┌────────┐    │
+│  │ XGBoost│ │   GB   │    │   │  │ XGBoost│ │   GB   │    │
+│  └────────┘ └────────┘    │   │  └────────┘ └────────┘    │
+│  ┌────────┐ ┌────────┐    │   │  ┌────────┐ ┌────────┐    │
+│  │Transf. │ │DistilB │    │   │  │Transf. │ │DistilB │    │
+│  └────────┘ └────────┘    │   │  └────────┘ └────────┘    │
+└────────────────────────────┘   └────────────────────────────┘
+             │                                 │
+             └─────────────┬───────────────────┘
                            ▼
 ┌─────────────────────────────────────────────────────────────┐
-│                   ML Models                                  │
-│  - Random Forest: Handcrafted features                      │
-│  - CNN-LSTM: Character-level deep learning                  │
+│                   Monitoring Stack                           │
+│  ┌─────────────┐        ┌─────────────┐                     │
+│  │ Prometheus  │───────>│   Grafana   │                     │
+│  │   :9090     │        │   :3001     │                     │
+│  └─────────────┘        └─────────────┘                     │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -108,8 +129,8 @@ make train
 make start
 
 # Or manually:
-docker-compose build
-docker-compose up -d
+docker compose build
+docker compose up -d
 ```
 
 **Available Commands:**
@@ -117,48 +138,117 @@ docker-compose up -d
 | Command | Description |
 |---------|-------------|
 | `make build` | Build all Docker images |
-| `make up` | Start all services |
+| `make up` | Start all services (frontend + backend) |
 | `make down` | Stop all services |
 | `make logs` | View logs from all services |
 | `make train` | Train ML models |
 | `make clean` | Remove all containers and images |
+| `make status` | Show status of all services |
+| `make restart` | Restart all services |
 
 **Services:**
 - **Frontend**: http://localhost:3000
 - **Backend API**: http://localhost:8000
 - **API Docs**: http://localhost:8000/docs
 
+### Monitoring Stack (Prometheus + Grafana)
+
+Start the monitoring stack alongside the main services:
+
+```bash
+# Start monitoring (Prometheus + Grafana)
+make monitoring-up
+
+# Stop monitoring
+make monitoring-down
+
+# View monitoring logs
+make monitoring-logs
+```
+
+**Monitoring Services:**
+- **Prometheus**: http://localhost:9090 - Metrics collection and querying
+- **Grafana**: http://localhost:3001 - Dashboards and visualization (login: admin/admin)
+- **API Metrics**: http://localhost:8000/metrics - Raw Prometheus metrics
+
+The Grafana dashboard is pre-configured with:
+- Total predictions and DGA detection rate
+- Request latency (p50, p95, p99)
+- Predictions by model, source, and result
+- Family classification breakdown
+- Threat level distribution
+
+### Load Testing (k6)
+
+Run load tests to validate API performance:
+
+```bash
+# Quick smoke test (10 iterations)
+make test-smoke
+
+# Standard load test (5 minutes, up to 20 VUs)
+make test-load
+
+# Stress test (12 minutes, up to 100 VUs)
+make test-stress
+
+# Run via Docker (no local k6 installation needed)
+make test-docker
+```
+
+**Test Types:**
+| Test | Duration | VUs | Purpose |
+|------|----------|-----|---------|
+| Smoke | 10 iterations | 1 | Quick validation |
+| Load | 5 minutes | 10-20 | Normal load simulation |
+| Stress | 12 minutes | 20-100 | Find breaking point |
+
 ## Dataset
 
-The project uses a balanced DGA detection dataset located in the `data/raw/` folder:
+The project uses multiple datasets located in the `data/raw/` folder:
 
 | File | Records | Description |
 |------|---------|-------------|
-| `dga_websites.csv` | 337,500 | DGA-generated domains |
-| `legit_websites.csv` | 337,398 | Legitimate domains |
+| `dga_websites.csv` | 337,500 | DGA-generated domains (binary detection) |
+| `legit_websites.csv` | 337,398 | Legitimate domains (binary detection) |
+| `dga_domains_full.csv` | ~1M | DGA domains with family labels (25 families) |
+| `ddns_links.csv` | 34,000+ | Dynamic DNS providers for DDNS detection |
 | `words.txt` | 354,986 | English dictionary for feature extraction |
+
+**Sources:**
+- DDNS providers: [alexandrosmagos/dyn-dns-list](https://github.com/alexandrosmagos/dyn-dns-list)
 
 ## Usage
 
 ### Step 1: Train the Models
 
 ```bash
-# Train both Random Forest and LSTM models
-python -m src.ml.train
+# Train all models (RF, LSTM, XGBoost, GB, Transformer, DistilBERT)
+python -m src.ml.train --all-models
 
 # Train with smaller sample (faster, for testing)
-python -m src.ml.train --sample-size 50000
+python -m src.ml.train --all-models --sample-size 50000
 
-# Train only Random Forest
+# Train only specific models
 python -m src.ml.train --rf-only
-
-# Train only LSTM
 python -m src.ml.train --lstm-only --epochs 30
+python -m src.ml.train --xgb-only
+python -m src.ml.train --gb-only
+python -m src.ml.train --transformer-only
+python -m src.ml.train --distilbert-only
+
+# Train family classifiers
+python -m src.ml.train --family-only
 ```
 
 Training outputs:
 - `models/random_forest.joblib` - Trained RF model
 - `models/lstm/` - Trained LSTM model
+- `models/xgboost.joblib` - Trained XGBoost model
+- `models/gradient_boosting.joblib` - Trained GB model
+- `models/transformer/` - Trained Transformer model
+- `models/distilbert/` - Trained DistilBERT model
+- `models/family_classifier_*.joblib` - Family classifiers
 - `models/plots/` - Confusion matrices, feature importance, training curves
 - `models/results_summary.json` - Performance metrics
 
@@ -230,12 +320,16 @@ For syncing detection data between the dashboard and extension:
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/health` | GET | Health check |
+| `/health` | GET | Health check with model status |
 | `/predict` | POST | Classify single domain |
 | `/predict/batch` | POST | Classify multiple domains |
 | `/predict/detailed` | POST | Classify with feature analysis |
+| `/predict/family` | POST | Classify with malware family detection |
 | `/stats` | GET | Detection statistics |
+| `/stats/families` | GET | Family detection statistics |
 | `/models` | GET | Model information |
+| `/families` | GET | DGA family information |
+| `/metrics` | GET | Prometheus metrics |
 | `/extension/check` | POST | Lightweight endpoint for extension |
 | `/auth/google` | POST | Google OAuth authentication |
 | `/auth/me` | GET | Get current user info |
@@ -254,34 +348,59 @@ curl -X POST "http://localhost:8000/predict" \
 curl -X POST "http://localhost:8000/predict/batch" \
   -H "Content-Type: application/json" \
   -d '{"domains": ["google.com", "xk23jf9sd.net", "facebook.com"]}'
+
+# Family classification (with threat intelligence)
+curl -X POST "http://localhost:8000/predict/family" \
+  -H "Content-Type: application/json" \
+  -d '{"domain": "xk23jf9sd.net"}'
+
+# Select specific model
+curl -X POST "http://localhost:8000/predict?model_type=lstm" \
+  -H "Content-Type: application/json" \
+  -d '{"domain": "suspicious123abc.net"}'
 ```
+
+### Model Selection
+
+You can specify which model to use via query parameters:
+
+| Parameter | Values | Description |
+|-----------|--------|-------------|
+| `model_type` | `auto`, `rf`, `lstm`, `xgb`, `gb`, `transformer`, `distilbert` | Binary detection model |
+| `family_model_type` | `auto`, `rf`, `lstm`, `xgb`, `gb`, `transformer`, `distilbert` | Family classification model |
+
+- `auto` (default): Uses the best available model (priority: DistilBERT > Transformer > LSTM > XGBoost > GB > RF)
+- For family classification, `auto` uses ensemble voting with weighted accuracy
 
 ## Model Comparison
 
-### Random Forest
+### Binary Detection Models
 
-**Approach:** Handcrafted features including:
-- Domain length, entropy, character distribution
-- N-gram analysis (bigrams, trigrams)
-- Dictionary word presence
-- Vowel/consonant ratios
+| Model | Type | Approach | Pros |
+|-------|------|----------|------|
+| **Random Forest** | Tree-based | Handcrafted features (entropy, n-grams, dictionary) | Fast (~1ms), interpretable, no GPU |
+| **XGBoost** | Tree-based | Gradient boosting on handcrafted features | Fast, handles imbalanced data well |
+| **Gradient Boosting** | Tree-based | Scikit-learn gradient boosting | Robust, good generalization |
+| **LSTM** | Neural Network | CNN + Bidirectional LSTM on characters | Learns patterns automatically |
+| **Transformer** | Neural Network | Self-attention on character sequences | Captures long-range dependencies |
+| **DistilBERT** | Neural Network | Fine-tuned language model | Highest accuracy, pre-trained knowledge |
 
-**Pros:**
-- Fast inference (~1ms per domain)
-- Interpretable features
-- No GPU required
+### Family Classification
 
-### LSTM (CNN-LSTM Hybrid)
+The system can identify 25 DGA malware families with threat intelligence:
 
-**Approach:** Character-level deep learning:
-- Character embeddings
-- 1D CNN for local pattern detection
-- Bidirectional LSTM for sequential patterns
+| Threat Level | Families |
+|--------------|----------|
+| **Critical** | Cryptolocker, Locky, WannaCry, Emotet |
+| **High** | Conficker, Zeus, Necurs, Ramnit, Dyre, Tinba |
+| **Medium** | Bamital, Banjori, Murofet, Rovnix, Symmi, Tempedreve |
+| **Low** | Ranbyus, Shiotob, Sisron, Suppobox, Vawtrak |
 
-**Pros:**
-- Learns features automatically
-- Better at capturing complex patterns
-- Higher accuracy potential
+Each family includes:
+- Description and behavior
+- First seen date
+- Malware type (ransomware, banking trojan, botnet, etc.)
+- Threat level assessment
 
 ## Project Structure
 
@@ -291,17 +410,25 @@ mei_aas_pf/
 │   └── raw/
 │       ├── dga_websites.csv
 │       ├── legit_websites.csv
+│       ├── dga_domains_full.csv  # Extended DGA dataset with families
+│       ├── ddns_links.csv        # 34k+ DDNS providers
 │       └── words.txt
 ├── src/
 │   ├── ml/                  # Machine learning module
 │   │   ├── features.py      # Feature extraction
 │   │   ├── random_forest_model.py
 │   │   ├── lstm_model.py
+│   │   ├── xgboost_model.py
+│   │   ├── gradient_boosting_model.py
+│   │   ├── transformer_model.py
+│   │   ├── distilbert_model.py
+│   │   ├── family_classifier.py  # Family classification models
 │   │   └── train.py         # Training script
 │   ├── api/                 # FastAPI backend
-│   │   ├── main.py          # API endpoints
+│   │   ├── main.py          # API endpoints + Prometheus metrics
 │   │   ├── models.py        # Pydantic schemas
-│   │   └── database.py      # SQLite logging
+│   │   ├── database.py      # SQLite logging
+│   │   └── auth.py          # Authentication
 │   └── utils/               # Utility functions
 ├── models/                  # Trained models (generated)
 ├── frontend/                # React dashboard
@@ -320,9 +447,18 @@ mei_aas_pf/
 │   ├── content.js           # Warning overlay
 │   ├── popup.html/js        # Extension popup
 │   └── icons/               # Extension icons
+├── monitoring/              # Monitoring stack
+│   ├── prometheus.yml       # Prometheus configuration
+│   └── grafana/
+│       ├── provisioning/    # Auto-provisioning configs
+│       └── dashboards/      # Pre-built dashboards
+├── tests/
+│   └── load/                # k6 load test scripts
+│       ├── k6-load-test.js
+│       └── k6-smoke-test.js
 ├── Dockerfile.backend       # Backend Docker image
 ├── Dockerfile.frontend      # Frontend Docker image
-├── docker-compose.yml       # Docker orchestration
+├── compose.yml              # Docker orchestration (includes monitoring)
 ├── nginx.conf               # Nginx configuration
 ├── Makefile                 # Build commands
 ├── requirements.txt         # Python dependencies
@@ -349,12 +485,17 @@ The CNN-LSTM model outperforms Random Forest across all metrics, achieving nearl
 
 ## Future Work
 
-- [ ] Add more DGA family-specific detection
 - [ ] Implement online learning for new threats
 - [ ] Add DNS query monitoring
 - [ ] Support for Firefox extension
+- [ ] Add alerting rules for Prometheus
 - [x] Containerize with Docker
 - [x] Add Google OAuth for dashboard/extension sync
+- [x] Add DGA family classification (25 families)
+- [x] Add multiple ML models (XGBoost, GB, Transformer, DistilBERT)
+- [x] Add Prometheus metrics and Grafana dashboards
+- [x] Add k6 load testing scripts
+- [x] DDNS provider detection (34k+ providers)
 
 ## License
 

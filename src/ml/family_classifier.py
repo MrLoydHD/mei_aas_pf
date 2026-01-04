@@ -501,7 +501,8 @@ class LSTMFamilyClassifier:
     def build_model(self, num_classes: int) -> None:
         """Build the LSTM model."""
         import tensorflow as tf
-        from tensorflow.keras import layers, Model
+        import keras
+        from keras import layers, Model
 
         vocab_size = len(self.char_to_idx)
 
@@ -556,7 +557,7 @@ class LSTMFamilyClassifier:
         Returns:
             Evaluation metrics
         """
-        from tensorflow.keras.callbacks import EarlyStopping, ReduceLROnPlateau
+        from keras.callbacks import EarlyStopping, ReduceLROnPlateau
 
         # Split data
         X_train, X_test, y_train, y_test = train_test_split(
@@ -670,7 +671,8 @@ class LSTMFamilyClassifier:
         import tensorflow as tf
 
         # Load Keras model
-        self.model = tf.keras.models.load_model(os.path.join(path, 'model.keras'))
+        import keras
+        self.model = keras.models.load_model(os.path.join(path, 'model.keras'))
 
         # Load metadata
         with open(os.path.join(path, 'metadata.json'), 'r') as f:
@@ -1096,7 +1098,8 @@ class TransformerFamilyClassifier:
     def build_model(self, num_classes: int) -> None:
         """Build the Transformer model."""
         import tensorflow as tf
-        from tensorflow.keras import layers, Model
+        import keras
+        from keras import layers, Model
 
         # Import custom layers from transformer_model
         from src.ml.transformer_model import TransformerBlock, PositionalEncoding
@@ -1146,7 +1149,7 @@ class TransformerFamilyClassifier:
         batch_size: int = 256
     ) -> Dict:
         """Train the Transformer family classifier."""
-        from tensorflow.keras.callbacks import EarlyStopping, ReduceLROnPlateau
+        from keras.callbacks import EarlyStopping, ReduceLROnPlateau
 
         X_train, X_test, y_train, y_test = train_test_split(
             X, y, test_size=test_size, random_state=42, stratify=y
@@ -1251,9 +1254,10 @@ class TransformerFamilyClassifier:
     def load(self, path: str) -> None:
         """Load the model."""
         import tensorflow as tf
+        import keras
         from src.ml.transformer_model import TransformerBlock, PositionalEncoding
 
-        self.model = tf.keras.models.load_model(
+        self.model = keras.models.load_model(
             os.path.join(path, 'model.keras'),
             custom_objects={
                 'TransformerBlock': TransformerBlock,
@@ -1275,7 +1279,7 @@ class TransformerFamilyClassifier:
 class DistilBERTFamilyClassifier:
     """
     DistilBERT-based classifier for DGA family classification.
-    Uses pre-trained DistilBERT fine-tuned for multi-class classification.
+    Uses pre-trained DistilBERT fine-tuned for multi-class classification (PyTorch).
     """
 
     def __init__(
@@ -1289,6 +1293,7 @@ class DistilBERTFamilyClassifier:
         self.model_name = model_name
         self.tokenizer = None
         self.model = None
+        self.device = None
         self.label_encoder = LabelEncoder()
         self.families = None
         self.metrics = None
@@ -1296,30 +1301,25 @@ class DistilBERTFamilyClassifier:
 
     def _load_pretrained(self, num_classes: int) -> None:
         """Load pre-trained tokenizer and model."""
+        import torch
         from transformers import (
             DistilBertTokenizer,
-            TFDistilBertForSequenceClassification,
-            DistilBertConfig
+            DistilBertForSequenceClassification
         )
 
+        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         print(f"Loading pre-trained {self.model_name}...")
+        print(f"Using device: {self.device}")
+
         self.tokenizer = DistilBertTokenizer.from_pretrained(self.model_name)
-
-        config = DistilBertConfig.from_pretrained(
+        self.model = DistilBertForSequenceClassification.from_pretrained(
             self.model_name,
-            num_labels=num_classes,
-            output_hidden_states=False
+            num_labels=num_classes
         )
-
-        self.model = TFDistilBertForSequenceClassification.from_pretrained(
-            self.model_name,
-            config=config
-        )
+        self.model.to(self.device)
 
     def tokenize_domains(self, domains: List[str]):
         """Tokenize domain names for DistilBERT."""
-        import tensorflow as tf
-
         spaced_domains = [' '.join(list(d.lower())) for d in domains]
 
         encoded = self.tokenizer(
@@ -1327,7 +1327,7 @@ class DistilBERTFamilyClassifier:
             max_length=self.max_length,
             padding='max_length',
             truncation=True,
-            return_tensors='tf'
+            return_tensors='pt'
         )
 
         return {
@@ -1364,62 +1364,126 @@ class DistilBERTFamilyClassifier:
         batch_size: int = 32
     ) -> Dict:
         """Fine-tune DistilBERT for family classification."""
-        import tensorflow as tf
+        import torch
+        from torch.utils.data import DataLoader, TensorDataset
+        from transformers import get_linear_schedule_with_warmup
 
         indices = np.arange(len(y))
         train_idx, test_idx = train_test_split(
             indices, test_size=test_size, random_state=42, stratify=y
         )
 
-        X_train = {
-            'input_ids': tf.gather(X['input_ids'], train_idx),
-            'attention_mask': tf.gather(X['attention_mask'], train_idx)
-        }
-        X_test = {
-            'input_ids': tf.gather(X['input_ids'], test_idx),
-            'attention_mask': tf.gather(X['attention_mask'], test_idx)
-        }
-        y_train = y[train_idx]
+        # Create datasets
+        train_dataset = TensorDataset(
+            X['input_ids'][train_idx],
+            X['attention_mask'][train_idx],
+            torch.tensor(y[train_idx], dtype=torch.long)
+        )
+        test_dataset = TensorDataset(
+            X['input_ids'][test_idx],
+            X['attention_mask'][test_idx],
+            torch.tensor(y[test_idx], dtype=torch.long)
+        )
+
+        train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+        test_loader = DataLoader(test_dataset, batch_size=batch_size)
+
         y_test = y[test_idx]
 
         num_classes = len(self.families)
         if self.model is None:
             self._load_pretrained(num_classes)
 
-        optimizer = tf.keras.optimizers.Adam(learning_rate=self.learning_rate)
-        loss = tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True)
-
-        self.model.compile(optimizer=optimizer, loss=loss, metrics=['accuracy'])
-
-        print(f"\nFine-tuning DistilBERT on {len(y_train)} samples...")
-
-        train_dataset = tf.data.Dataset.from_tensor_slices((
-            {'input_ids': X_train['input_ids'], 'attention_mask': X_train['attention_mask']},
-            y_train
-        )).shuffle(len(y_train)).batch(batch_size)
-
-        val_dataset = tf.data.Dataset.from_tensor_slices((
-            {'input_ids': X_test['input_ids'], 'attention_mask': X_test['attention_mask']},
-            y_test
-        )).batch(batch_size)
-
-        callbacks = [
-            tf.keras.callbacks.EarlyStopping(patience=2, restore_best_weights=True)
-        ]
-
-        history = self.model.fit(
-            train_dataset,
-            validation_data=val_dataset,
-            epochs=epochs,
-            callbacks=callbacks,
-            verbose=1
+        # Optimizer and scheduler
+        optimizer = torch.optim.AdamW(self.model.parameters(), lr=self.learning_rate)
+        total_steps = len(train_loader) * epochs
+        scheduler = get_linear_schedule_with_warmup(
+            optimizer,
+            num_warmup_steps=total_steps // 10,
+            num_training_steps=total_steps
         )
 
-        self.history = {k: [float(v) for v in vals] for k, vals in history.history.items()}
+        print(f"\nFine-tuning DistilBERT on {len(train_idx)} samples...")
+
+        self.history = {'loss': [], 'val_loss': [], 'accuracy': [], 'val_accuracy': []}
+        best_val_loss = float('inf')
+        patience = 2
+        patience_counter = 0
+
+        for epoch in range(epochs):
+            # Training
+            self.model.train()
+            total_loss = 0
+            correct = 0
+            total = 0
+
+            for batch in train_loader:
+                input_ids, attention_mask, labels = [b.to(self.device) for b in batch]
+
+                optimizer.zero_grad()
+                outputs = self.model(input_ids=input_ids, attention_mask=attention_mask, labels=labels)
+                loss = outputs.loss
+                loss.backward()
+
+                torch.nn.utils.clip_grad_norm_(self.model.parameters(), 1.0)
+                optimizer.step()
+                scheduler.step()
+
+                total_loss += loss.item()
+                preds = torch.argmax(outputs.logits, dim=1)
+                correct += (preds == labels).sum().item()
+                total += labels.size(0)
+
+            avg_train_loss = total_loss / len(train_loader)
+            train_acc = correct / total
+            self.history['loss'].append(avg_train_loss)
+            self.history['accuracy'].append(train_acc)
+
+            # Validation
+            self.model.eval()
+            val_loss = 0
+            val_correct = 0
+            val_total = 0
+
+            with torch.no_grad():
+                for batch in test_loader:
+                    input_ids, attention_mask, labels = [b.to(self.device) for b in batch]
+                    outputs = self.model(input_ids=input_ids, attention_mask=attention_mask, labels=labels)
+                    val_loss += outputs.loss.item()
+                    preds = torch.argmax(outputs.logits, dim=1)
+                    val_correct += (preds == labels).sum().item()
+                    val_total += labels.size(0)
+
+            avg_val_loss = val_loss / len(test_loader)
+            val_acc = val_correct / val_total
+            self.history['val_loss'].append(avg_val_loss)
+            self.history['val_accuracy'].append(val_acc)
+
+            print(f"Epoch {epoch + 1}/{epochs} - "
+                  f"loss: {avg_train_loss:.4f} - acc: {train_acc:.4f} - "
+                  f"val_loss: {avg_val_loss:.4f} - val_acc: {val_acc:.4f}")
+
+            # Early stopping
+            if avg_val_loss < best_val_loss:
+                best_val_loss = avg_val_loss
+                patience_counter = 0
+            else:
+                patience_counter += 1
+                if patience_counter >= patience:
+                    print(f"Early stopping at epoch {epoch + 1}")
+                    break
 
         # Evaluate
-        outputs = self.model.predict(X_test, verbose=0)
-        y_pred = np.argmax(outputs.logits, axis=1)
+        self.model.eval()
+        all_preds = []
+        with torch.no_grad():
+            for batch in test_loader:
+                input_ids, attention_mask, _ = [b.to(self.device) for b in batch]
+                outputs = self.model(input_ids=input_ids, attention_mask=attention_mask)
+                preds = torch.argmax(outputs.logits, dim=1)
+                all_preds.extend(preds.cpu().numpy())
+
+        y_pred = np.array(all_preds)
 
         self.metrics = {
             'accuracy': accuracy_score(y_test, y_pred),
@@ -1440,14 +1504,19 @@ class DistilBERTFamilyClassifier:
 
     def predict(self, domain: str) -> Dict:
         """Predict family for a single domain."""
-        import tensorflow as tf
+        import torch
 
         if self.model is None:
             raise ValueError("Model not trained or loaded")
 
+        self.model.eval()
         tokenized = self.tokenize_domains([domain])
-        outputs = self.model.predict(tokenized, verbose=0)
-        proba = tf.nn.softmax(outputs.logits, axis=-1).numpy()[0]
+
+        with torch.no_grad():
+            input_ids = tokenized['input_ids'].to(self.device)
+            attention_mask = tokenized['attention_mask'].to(self.device)
+            outputs = self.model(input_ids=input_ids, attention_mask=attention_mask)
+            proba = torch.softmax(outputs.logits, dim=-1).cpu().numpy()[0]
 
         pred_idx = np.argmax(proba)
         family = self.families[pred_idx]
@@ -1499,17 +1568,21 @@ class DistilBERTFamilyClassifier:
 
     def load(self, path: str) -> None:
         """Load a fine-tuned model."""
+        import torch
         from transformers import (
             DistilBertTokenizer,
-            TFDistilBertForSequenceClassification
+            DistilBertForSequenceClassification
         )
+
+        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
         self.tokenizer = DistilBertTokenizer.from_pretrained(
             os.path.join(path, 'tokenizer')
         )
-        self.model = TFDistilBertForSequenceClassification.from_pretrained(
+        self.model = DistilBertForSequenceClassification.from_pretrained(
             os.path.join(path, 'model')
         )
+        self.model.to(self.device)
 
         with open(os.path.join(path, 'metadata.json'), 'r') as f:
             metadata = json.load(f)

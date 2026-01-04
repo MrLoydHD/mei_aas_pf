@@ -1,0 +1,48 @@
+# Prometheus configuration for DGA Detection System
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    monitor: 'dga-detection-monitor'
+
+# Alerting configuration (optional - add alertmanager if needed)
+# alerting:
+#   alertmanagers:
+#     - static_configs:
+#         - targets: ['alertmanager:9093']
+
+# Rule files (optional - add alert rules if needed)
+# rule_files:
+#   - "alert_rules.yml"
+
+scrape_configs:
+  # Prometheus self-monitoring
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+        labels:
+          service: 'prometheus'
+
+  # DGA Detection API
+  - job_name: 'dga-api'
+    metrics_path: '/metrics'
+    static_configs:
+      - targets: ['backend:8000']
+        labels:
+          service: 'dga-api'
+          environment: 'docker'
+    # Relabel to add instance label with hostname
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: 'dga-backend'
+
+  # For local development (uncomment when running API locally)
+  # - job_name: 'dga-api-local'
+  #   metrics_path: '/metrics'
+  #   static_configs:
+  #     - targets: ['host.docker.internal:8000']
+  #       labels:
+  #         service: 'dga-api'
+  #         environment: 'local'

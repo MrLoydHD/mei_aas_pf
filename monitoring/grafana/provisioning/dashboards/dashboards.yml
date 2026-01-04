@@ -1,0 +1,16 @@
+# Grafana Dashboard Provisioning
+# Automatically loads dashboards from the specified folder
+
+apiVersion: 1
+
+providers:
+  - name: 'DGA Detection Dashboards'
+    orgId: 1
+    folder: 'DGA Detection'
+    folderUid: 'dga-detection'
+    type: file
+    disableDeletion: false
+    editable: true
+    updateIntervalSeconds: 30
+    options:
+      path: /var/lib/grafana/dashboards

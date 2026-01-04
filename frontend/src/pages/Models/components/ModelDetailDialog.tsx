@@ -63,10 +63,6 @@ export function ModelDetailDialog({ model, open, onOpenChange }: ModelDetailDial
   const isTreeBased = treeBasedModels.includes(model.model_type);
   const isFamilyClassifier = familyClassifierTypes.includes(model.model_type);
 
-  // For backwards compatibility
-  const isLSTM = model.model_type === 'lstm';
-  const isRandomForest = model.model_type === 'random_forest';
-
   // Helper to safely get metric value (handles both binary and family classifier metric names)
   const getMetricValue = (key: string): number => {
     if (!metrics) return 0;

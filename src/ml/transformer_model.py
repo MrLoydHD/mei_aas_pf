@@ -11,10 +11,10 @@ import numpy as np
 # TensorFlow imports
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'  # Suppress TF warnings
 import tensorflow as tf
-from tensorflow import keras
-from tensorflow.keras import layers, Model
-from tensorflow.keras.preprocessing.sequence import pad_sequences
-from tensorflow.keras.callbacks import EarlyStopping, ReduceLROnPlateau
+import keras
+from keras import layers, Model
+from keras.callbacks import EarlyStopping, ReduceLROnPlateau
+from keras.utils import pad_sequences
 
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import (

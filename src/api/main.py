@@ -15,9 +15,52 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Depends, Request, Query
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
+from prometheus_fastapi_instrumentator import Instrumentator
+from prometheus_client import Counter, Histogram, Gauge, Info
 
 # Load environment variables from .env file
 load_dotenv()
+
+# ============== Prometheus Metrics ==============
+
+# Custom counters
+PREDICTIONS_TOTAL = Counter(
+    'dga_predictions_total',
+    'Total number of DGA predictions',
+    ['model', 'result', 'source']
+)
+
+FAMILY_PREDICTIONS_TOTAL = Counter(
+    'dga_family_predictions_total',
+    'Total number of family classification predictions',
+    ['model', 'family', 'threat_level']
+)
+
+# Histograms for latency
+PREDICTION_LATENCY = Histogram(
+    'dga_prediction_latency_seconds',
+    'Time spent processing predictions',
+    ['model', 'endpoint'],
+    buckets=[0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0]
+)
+
+# Gauges for current state
+MODELS_LOADED = Gauge(
+    'dga_models_loaded',
+    'Number of models currently loaded',
+    ['model_type']  # 'binary' or 'family'
+)
+
+DDNS_PROVIDERS_COUNT = Gauge(
+    'dga_ddns_providers_loaded',
+    'Number of DDNS providers loaded for detection'
+)
+
+# Model info
+MODEL_INFO = Info(
+    'dga_detector',
+    'DGA Detector application information'
+)
 
 # Add parent directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
@@ -223,6 +266,15 @@ async def lifespan(app: FastAPI):
         family_distilbert_model is not None
     ])
 
+    # Update Prometheus gauges
+    MODELS_LOADED.labels(model_type='binary').set(binary_models)
+    MODELS_LOADED.labels(model_type='family').set(family_models)
+    MODEL_INFO.info({
+        'version': '1.0.0',
+        'binary_models': str(binary_models),
+        'family_models': str(family_models)
+    })
+
     if binary_models == 0:
         print("WARNING: No DGA detection models loaded. Please train models first.")
     else:
@@ -260,6 +312,9 @@ app.add_middleware(
 
 # Include auth router
 app.include_router(auth_router)
+
+# Prometheus instrumentation - adds /metrics endpoint and automatic HTTP metrics
+Instrumentator().instrument(app).expose(app, include_in_schema=True, tags=["Monitoring"])
 
 
 def get_active_model(model_type: str = "auto"):
@@ -346,6 +401,7 @@ def load_ddns_providers() -> set:
 
 # Load DDNS providers at module load time
 DDNS_PROVIDERS = load_ddns_providers()
+DDNS_PROVIDERS_COUNT.set(len(DDNS_PROVIDERS))
 
 
 def extract_domain_from_url(url_or_domain: str, strip_tld: bool = True) -> str:
@@ -454,6 +510,7 @@ async def predict_domain(
     - **model_type**: Which model to use (auto, rf, lstm)
     - **log**: Whether to log this detection
     """
+    start_time = time.time()
     model, model_name = get_active_model(model_type)
 
     # Extract domain from URL if needed
@@ -461,6 +518,14 @@ async def predict_domain(
 
     # Make prediction
     result = model.predict(domain)
+
+    # Record Prometheus metrics
+    PREDICTION_LATENCY.labels(model=model_name, endpoint='predict').observe(time.time() - start_time)
+    PREDICTIONS_TOTAL.labels(
+        model=model_name,
+        result='dga' if result['is_dga'] else 'legit',
+        source='dashboard'
+    ).inc()
 
     # Log detection
     if log:
@@ -504,6 +569,7 @@ async def predict_batch(
     - **model_type**: Which model to use (auto, rf, lstm)
     - **log**: Whether to log these detections
     """
+    start_time = time.time()
     model, model_name = get_active_model(model_type)
 
     # Extract domains
@@ -511,6 +577,9 @@ async def predict_batch(
 
     # Make predictions
     results = model.predict_batch(domains)
+
+    # Record Prometheus latency for batch
+    PREDICTION_LATENCY.labels(model=model_name, endpoint='predict_batch').observe(time.time() - start_time)
 
     predictions = []
     dga_count = 0
@@ -520,6 +589,13 @@ async def predict_batch(
     for i, result in enumerate(results):
         if result['is_dga']:
             dga_count += 1
+
+        # Record individual prediction metrics
+        PREDICTIONS_TOTAL.labels(
+            model=model_name,
+            result='dga' if result['is_dga'] else 'legit',
+            source='dashboard_batch'
+        ).inc()
 
         # Log detection
         if log and repo:
@@ -978,6 +1054,7 @@ async def predict_with_family(
 
     Returns threat intelligence including family name, threat level, and malware type.
     """
+    start_time = time.time()
     model, model_name = get_active_model(model_type)
 
     # Extract domain from URL - strip TLD for binary detection
@@ -987,6 +1064,13 @@ async def predict_with_family(
 
     # Stage 1: Binary DGA detection
     result = model.predict(domain_for_detection)
+
+    # Record binary prediction metrics
+    PREDICTIONS_TOTAL.labels(
+        model=model_name,
+        result='dga' if result['is_dga'] else 'legit',
+        source='dashboard_family'
+    ).inc()
 
     family_info = None
     family_name = None
@@ -1025,6 +1109,16 @@ async def predict_with_family(
             family_name = family_result['family']
             family_confidence = family_result['confidence']
             threat_level = family_result['threat_level']
+
+            # Record family prediction metrics
+            FAMILY_PREDICTIONS_TOTAL.labels(
+                model=family_model_used or 'unknown',
+                family=family_name,
+                threat_level=threat_level
+            ).inc()
+
+    # Record overall latency
+    PREDICTION_LATENCY.labels(model=model_name, endpoint='predict_family').observe(time.time() - start_time)
 
     # Log detection with family info
     if log:
@@ -1114,10 +1208,19 @@ async def extension_check(
     Returns minimal data for fast response.
     Optionally accepts authentication to link detections to user.
     """
+    start_time = time.time()
     model, model_name = get_active_model("auto")
 
     domain = extract_domain_from_url(request.domain)
     result = model.predict(domain)
+
+    # Record Prometheus metrics
+    PREDICTION_LATENCY.labels(model=model_name, endpoint='extension_check').observe(time.time() - start_time)
+    PREDICTIONS_TOTAL.labels(
+        model=model_name,
+        result='dga' if result['is_dga'] else 'legit',
+        source='extension'
+    ).inc()
 
     # Log with extension source
     repo = DetectionRepository(db)
