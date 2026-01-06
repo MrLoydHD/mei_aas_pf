@@ -289,10 +289,13 @@ class DGAFamilyClassifier:
         # Calculate metrics
         self.metrics = {
             'accuracy': accuracy_score(y_test, y_pred),
+            'precision_micro': precision_score(y_test, y_pred, average='micro'),
             'precision_macro': precision_score(y_test, y_pred, average='macro'),
             'precision_weighted': precision_score(y_test, y_pred, average='weighted'),
+            'recall_micro': recall_score(y_test, y_pred, average='micro'),
             'recall_macro': recall_score(y_test, y_pred, average='macro'),
             'recall_weighted': recall_score(y_test, y_pred, average='weighted'),
+            'f1_micro': f1_score(y_test, y_pred, average='micro'),
             'f1_macro': f1_score(y_test, y_pred, average='macro'),
             'f1_weighted': f1_score(y_test, y_pred, average='weighted'),
             'confusion_matrix': confusion_matrix(y_test, y_pred).tolist(),
@@ -307,6 +310,9 @@ class DGAFamilyClassifier:
 
         print(f"\nResults:")
         print(f"  Accuracy: {self.metrics['accuracy']:.4f}")
+        print(f"  F1-Score (micro): {self.metrics['f1_micro']:.4f}")
+        print(f"  F1-Score (macro): {self.metrics['f1_macro']:.4f}")
+        print(f"  F1-Score (weighted): {self.metrics['f1_weighted']:.4f}")
         print(f"  Precision (macro): {self.metrics['precision_macro']:.4f}")
         print(f"  Recall (macro): {self.metrics['recall_macro']:.4f}")
         print(f"  F1-Score (macro): {self.metrics['f1_macro']:.4f}")
@@ -594,9 +600,15 @@ class LSTMFamilyClassifier:
 
         self.metrics = {
             'accuracy': accuracy_score(y_test, y_pred),
+            'precision_micro': precision_score(y_test, y_pred, average='micro'),
             'precision_macro': precision_score(y_test, y_pred, average='macro'),
+            'precision_weighted': precision_score(y_test, y_pred, average='weighted'),
+            'recall_micro': recall_score(y_test, y_pred, average='micro'),
             'recall_macro': recall_score(y_test, y_pred, average='macro'),
+            'recall_weighted': recall_score(y_test, y_pred, average='weighted'),
+            'f1_micro': f1_score(y_test, y_pred, average='micro'),
             'f1_macro': f1_score(y_test, y_pred, average='macro'),
+            'f1_weighted': f1_score(y_test, y_pred, average='weighted'),
             'confusion_matrix': confusion_matrix(y_test, y_pred).tolist(),
             'num_families': len(self.families),
             'families': self.families,
@@ -605,7 +617,9 @@ class LSTMFamilyClassifier:
 
         print(f"\nResults:")
         print(f"  Accuracy: {self.metrics['accuracy']:.4f}")
+        print(f"  F1-Score (micro): {self.metrics['f1_micro']:.4f}")
         print(f"  F1-Score (macro): {self.metrics['f1_macro']:.4f}")
+        print(f"  F1-Score (weighted): {self.metrics['f1_weighted']:.4f}")
 
         return self.metrics
 
@@ -670,9 +684,12 @@ class LSTMFamilyClassifier:
         """Load the model."""
         import tensorflow as tf
 
-        # Load Keras model
+        # Load Keras model (safe_mode=False to handle version differences in config)
         import keras
-        self.model = keras.models.load_model(os.path.join(path, 'model.keras'))
+        self.model = keras.models.load_model(
+            os.path.join(path, 'model.keras'),
+            safe_mode=False
+        )
 
         # Load metadata
         with open(os.path.join(path, 'metadata.json'), 'r') as f:
@@ -759,7 +776,6 @@ class XGBoostFamilyClassifier:
             learning_rate=self.learning_rate,
             random_state=random_state,
             n_jobs=-1,
-            use_label_encoder=False,
             eval_metric='mlogloss',
             objective='multi:softprob'
         )
@@ -770,10 +786,13 @@ class XGBoostFamilyClassifier:
 
         self.metrics = {
             'accuracy': accuracy_score(y_test, y_pred),
+            'precision_micro': precision_score(y_test, y_pred, average='micro'),
             'precision_macro': precision_score(y_test, y_pred, average='macro'),
             'precision_weighted': precision_score(y_test, y_pred, average='weighted'),
+            'recall_micro': recall_score(y_test, y_pred, average='micro'),
             'recall_macro': recall_score(y_test, y_pred, average='macro'),
             'recall_weighted': recall_score(y_test, y_pred, average='weighted'),
+            'f1_micro': f1_score(y_test, y_pred, average='micro'),
             'f1_macro': f1_score(y_test, y_pred, average='macro'),
             'f1_weighted': f1_score(y_test, y_pred, average='weighted'),
             'confusion_matrix': confusion_matrix(y_test, y_pred).tolist(),
@@ -940,10 +959,13 @@ class GradientBoostingFamilyClassifier:
 
         self.metrics = {
             'accuracy': accuracy_score(y_test, y_pred),
+            'precision_micro': precision_score(y_test, y_pred, average='micro'),
             'precision_macro': precision_score(y_test, y_pred, average='macro'),
             'precision_weighted': precision_score(y_test, y_pred, average='weighted'),
+            'recall_micro': recall_score(y_test, y_pred, average='micro'),
             'recall_macro': recall_score(y_test, y_pred, average='macro'),
             'recall_weighted': recall_score(y_test, y_pred, average='weighted'),
+            'f1_micro': f1_score(y_test, y_pred, average='micro'),
             'f1_macro': f1_score(y_test, y_pred, average='macro'),
             'f1_weighted': f1_score(y_test, y_pred, average='weighted'),
             'confusion_matrix': confusion_matrix(y_test, y_pred).tolist(),
@@ -1181,9 +1203,15 @@ class TransformerFamilyClassifier:
 
         self.metrics = {
             'accuracy': accuracy_score(y_test, y_pred),
+            'precision_micro': precision_score(y_test, y_pred, average='micro'),
             'precision_macro': precision_score(y_test, y_pred, average='macro'),
+            'precision_weighted': precision_score(y_test, y_pred, average='weighted'),
+            'recall_micro': recall_score(y_test, y_pred, average='micro'),
             'recall_macro': recall_score(y_test, y_pred, average='macro'),
+            'recall_weighted': recall_score(y_test, y_pred, average='weighted'),
+            'f1_micro': f1_score(y_test, y_pred, average='micro'),
             'f1_macro': f1_score(y_test, y_pred, average='macro'),
+            'f1_weighted': f1_score(y_test, y_pred, average='weighted'),
             'confusion_matrix': confusion_matrix(y_test, y_pred).tolist(),
             'num_families': len(self.families),
             'families': self.families,
@@ -1192,7 +1220,9 @@ class TransformerFamilyClassifier:
 
         print(f"\nResults:")
         print(f"  Accuracy: {self.metrics['accuracy']:.4f}")
+        print(f"  F1-Score (micro): {self.metrics['f1_micro']:.4f}")
         print(f"  F1-Score (macro): {self.metrics['f1_macro']:.4f}")
+        print(f"  F1-Score (weighted): {self.metrics['f1_weighted']:.4f}")
 
         return self.metrics
 
@@ -1257,12 +1287,14 @@ class TransformerFamilyClassifier:
         import keras
         from src.ml.transformer_model import TransformerBlock, PositionalEncoding
 
+        # safe_mode=False to handle version differences in config
         self.model = keras.models.load_model(
             os.path.join(path, 'model.keras'),
             custom_objects={
                 'TransformerBlock': TransformerBlock,
                 'PositionalEncoding': PositionalEncoding
-            }
+            },
+            safe_mode=False
         )
 
         with open(os.path.join(path, 'metadata.json'), 'r') as f:
@@ -1487,9 +1519,15 @@ class DistilBERTFamilyClassifier:
 
         self.metrics = {
             'accuracy': accuracy_score(y_test, y_pred),
+            'precision_micro': precision_score(y_test, y_pred, average='micro'),
             'precision_macro': precision_score(y_test, y_pred, average='macro'),
+            'precision_weighted': precision_score(y_test, y_pred, average='weighted'),
+            'recall_micro': recall_score(y_test, y_pred, average='micro'),
             'recall_macro': recall_score(y_test, y_pred, average='macro'),
+            'recall_weighted': recall_score(y_test, y_pred, average='weighted'),
+            'f1_micro': f1_score(y_test, y_pred, average='micro'),
             'f1_macro': f1_score(y_test, y_pred, average='macro'),
+            'f1_weighted': f1_score(y_test, y_pred, average='weighted'),
             'confusion_matrix': confusion_matrix(y_test, y_pred).tolist(),
             'num_families': len(self.families),
             'families': self.families,
@@ -1498,7 +1536,9 @@ class DistilBERTFamilyClassifier:
 
         print(f"\nResults:")
         print(f"  Accuracy: {self.metrics['accuracy']:.4f}")
+        print(f"  F1-Score (micro): {self.metrics['f1_micro']:.4f}")
         print(f"  F1-Score (macro): {self.metrics['f1_macro']:.4f}")
+        print(f"  F1-Score (weighted): {self.metrics['f1_weighted']:.4f}")
 
         return self.metrics
 

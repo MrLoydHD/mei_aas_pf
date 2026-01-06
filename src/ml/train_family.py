@@ -322,6 +322,43 @@ def train_xgboost_family_classifier(
             os.path.join(plots_dir, 'family_xgb_confusion_matrix.png')
         )
 
+        # Feature importance
+        importances = classifier.get_feature_importance()
+        if importances:
+            sorted_features = sorted(importances.items(), key=lambda x: x[1], reverse=True)[:20]
+            features, values = zip(*sorted_features)
+
+            plt.figure(figsize=(10, 8))
+            colors = plt.cm.viridis(np.linspace(0.2, 0.8, len(features)))
+            plt.barh(range(len(features)), values, color=colors)
+            plt.yticks(range(len(features)), features)
+            plt.xlabel('Importance')
+            plt.title('XGBoost Family Classifier - Top 20 Feature Importance')
+            plt.gca().invert_yaxis()
+            plt.tight_layout()
+            plt.savefig(os.path.join(plots_dir, 'family_xgb_feature_importance.png'), dpi=150)
+            plt.close()
+            print(f"XGBoost feature importance saved to {plots_dir}/family_xgb_feature_importance.png")
+
+        # Save individual results JSON
+        xgb_results = {
+            'accuracy': metrics.get('accuracy'),
+            'precision_micro': metrics.get('precision_micro'),
+            'precision_macro': metrics.get('precision_macro'),
+            'precision_weighted': metrics.get('precision_weighted'),
+            'recall_micro': metrics.get('recall_micro'),
+            'recall_macro': metrics.get('recall_macro'),
+            'recall_weighted': metrics.get('recall_weighted'),
+            'f1_micro': metrics.get('f1_micro'),
+            'f1_macro': metrics.get('f1_macro'),
+            'f1_weighted': metrics.get('f1_weighted'),
+            'num_families': metrics.get('num_families'),
+            'families': metrics.get('families')
+        }
+        with open(os.path.join(models_dir, 'family_xgb_results.json'), 'w') as f:
+            json.dump(xgb_results, f, indent=2)
+        print(f"XGBoost results saved to {models_dir}/family_xgb_results.json")
+
         return metrics
 
     except ImportError as e:
@@ -361,6 +398,43 @@ def train_gb_family_classifier(
         'Gradient Boosting Family Classifier - Confusion Matrix',
         os.path.join(plots_dir, 'family_gb_confusion_matrix.png')
     )
+
+    # Feature importance
+    importances = classifier.get_feature_importance()
+    if importances:
+        sorted_features = sorted(importances.items(), key=lambda x: x[1], reverse=True)[:20]
+        features, values = zip(*sorted_features)
+
+        plt.figure(figsize=(10, 8))
+        colors = plt.cm.viridis(np.linspace(0.2, 0.8, len(features)))
+        plt.barh(range(len(features)), values, color=colors)
+        plt.yticks(range(len(features)), features)
+        plt.xlabel('Importance')
+        plt.title('Gradient Boosting Family Classifier - Top 20 Feature Importance')
+        plt.gca().invert_yaxis()
+        plt.tight_layout()
+        plt.savefig(os.path.join(plots_dir, 'family_gb_feature_importance.png'), dpi=150)
+        plt.close()
+        print(f"GB feature importance saved to {plots_dir}/family_gb_feature_importance.png")
+
+    # Save individual results JSON
+    gb_results = {
+        'accuracy': metrics.get('accuracy'),
+        'precision_micro': metrics.get('precision_micro'),
+        'precision_macro': metrics.get('precision_macro'),
+        'precision_weighted': metrics.get('precision_weighted'),
+        'recall_micro': metrics.get('recall_micro'),
+        'recall_macro': metrics.get('recall_macro'),
+        'recall_weighted': metrics.get('recall_weighted'),
+        'f1_micro': metrics.get('f1_micro'),
+        'f1_macro': metrics.get('f1_macro'),
+        'f1_weighted': metrics.get('f1_weighted'),
+        'num_families': metrics.get('num_families'),
+        'families': metrics.get('families')
+    }
+    with open(os.path.join(models_dir, 'family_gb_results.json'), 'w') as f:
+        json.dump(gb_results, f, indent=2)
+    print(f"GB results saved to {models_dir}/family_gb_results.json")
 
     return metrics
 
@@ -568,23 +642,29 @@ def main():
     if len(results) > 1:
         print("\n" + "="*60)
         print("MODEL COMPARISON")
-        print("="*60)
+        print("="*80)
 
-        print(f"\n{'Model':<20} {'Accuracy':<12} {'F1 (macro)':<12} {'F1 (weighted)':<12}")
-        print("-" * 56)
+        print(f"\n{'Model':<20} {'Accuracy':<12} {'F1 (micro)':<12} {'F1 (macro)':<12} {'F1 (weighted)':<12}")
+        print("-" * 68)
 
         for model_name, metrics in results.items():
             acc = metrics.get('accuracy', 0)
+            f1_micro = metrics.get('f1_micro', 0)
             f1_macro = metrics.get('f1_macro', 0)
             f1_weighted = metrics.get('f1_weighted', f1_macro)
-            print(f"{model_name:<20} {acc:<12.4f} {f1_macro:<12.4f} {f1_weighted:<12.4f}")
+            print(f"{model_name:<20} {acc:<12.4f} {f1_micro:<12.4f} {f1_macro:<12.4f} {f1_weighted:<12.4f}")
 
     # Save results summary
     results_summary = {
         model: {
             'accuracy': metrics.get('accuracy'),
+            'precision_micro': metrics.get('precision_micro'),
             'precision_macro': metrics.get('precision_macro'),
+            'precision_weighted': metrics.get('precision_weighted'),
+            'recall_micro': metrics.get('recall_micro'),
             'recall_macro': metrics.get('recall_macro'),
+            'recall_weighted': metrics.get('recall_weighted'),
+            'f1_micro': metrics.get('f1_micro'),
             'f1_macro': metrics.get('f1_macro'),
             'f1_weighted': metrics.get('f1_weighted'),
             'num_families': metrics.get('num_families'),

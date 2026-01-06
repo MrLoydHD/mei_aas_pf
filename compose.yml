@@ -54,7 +54,7 @@ services:
       - ./data:/app/data:ro
     environment:
       - PYTHONUNBUFFERED=1
-    command: ["python", "-m", "src.ml.train", "--all-models"]
+    command: ["sh", "-c", "python -m src.ml.train --all-models && python -m src.ml.train_family --all-models"]
     deploy:
       resources:
         reservations:

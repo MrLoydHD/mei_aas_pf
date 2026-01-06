@@ -80,7 +80,6 @@ class XGBoostDGADetector:
             reg_lambda=reg_lambda,
             random_state=random_state,
             n_jobs=-1,
-            use_label_encoder=False,
             eval_metric='logloss',
             scale_pos_weight=1  # Will be computed if data is imbalanced
         )

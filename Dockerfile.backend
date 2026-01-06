@@ -26,8 +26,20 @@ EXPOSE 8000
 
 # Environment variables
 ENV PYTHONUNBUFFERED=1
+# Binary classifiers
 ENV RF_MODEL_PATH=models/random_forest.joblib
 ENV LSTM_MODEL_PATH=models/lstm
+ENV XGB_MODEL_PATH=models/xgboost.joblib
+ENV GB_MODEL_PATH=models/gradient_boosting.joblib
+ENV TRANSFORMER_MODEL_PATH=models/transformer
+ENV DISTILBERT_MODEL_PATH=models/distilbert
+# Family classifiers
+ENV FAMILY_RF_MODEL_PATH=models/family_rf.joblib
+ENV FAMILY_LSTM_MODEL_PATH=models/family_lstm
+ENV FAMILY_XGB_MODEL_PATH=models/family_xgb.joblib
+ENV FAMILY_GB_MODEL_PATH=models/family_gb.joblib
+ENV FAMILY_TRANSFORMER_MODEL_PATH=models/family_transformer
+ENV FAMILY_DISTILBERT_MODEL_PATH=models/family_distilbert
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \

@@ -427,13 +427,14 @@ class TransformerDGADetector:
         """
         import json
 
-        # Load Keras model with custom objects
+        # Load Keras model with custom objects (safe_mode=False to handle version differences in config)
         self.model = keras.models.load_model(
             os.path.join(path, 'model.keras'),
             custom_objects={
                 'TransformerBlock': TransformerBlock,
                 'PositionalEncoding': PositionalEncoding
-            }
+            },
+            safe_mode=False
         )
 
         # Load metadata

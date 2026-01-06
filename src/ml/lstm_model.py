@@ -422,8 +422,11 @@ class LSTMDGADetector:
         """
         import json
 
-        # Load Keras model
-        self.model = keras.models.load_model(os.path.join(path, 'model.keras'))
+        # Load Keras model (safe_mode=False to handle version differences in config)
+        self.model = keras.models.load_model(
+            os.path.join(path, 'model.keras'),
+            safe_mode=False
+        )
 
         # Load metadata
         with open(os.path.join(path, 'metadata.json'), 'r') as f:

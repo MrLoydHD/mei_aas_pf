@@ -1,4 +1,4 @@
-.PHONY: build up down logs train clean help monitoring-up monitoring-down test-smoke test-load test-stress
+.PHONY: build up down logs train train-binary train-family clean help monitoring-up monitoring-down test-smoke test-load test-stress
 
 # Default target
 help:
@@ -11,7 +11,9 @@ help:
 	@echo "  up              Start all services"
 	@echo "  down            Stop all services"
 	@echo "  logs            View logs from all services"
-	@echo "  train           Train ML models (run once before starting)"
+	@echo "  train           Train all ML models (binary + family)"
+	@echo "  train-binary    Train only binary classifiers (DGA vs legit)"
+	@echo "  train-family    Train only family classifiers"
 	@echo "  clean           Remove all containers, images, and volumes"
 	@echo "  restart         Restart all services"
 	@echo "  status          Show status of all services"
@@ -48,11 +50,23 @@ down:
 logs:
 	docker compose logs -f
 
-# Train models
+# Train all models (binary + family classifiers)
 train:
-	@echo "Training ML models..."
+	@echo "Training all ML models (binary + family)..."
 	docker compose --profile training run --rm trainer
 	@echo "Training complete! Models saved to ./models/"
+
+# Train only binary classifiers (DGA vs legit)
+train-binary:
+	@echo "Training binary classifiers..."
+	docker compose --profile training run --rm trainer python -m src.ml.train --all-models
+	@echo "Binary training complete!"
+
+# Train only family classifiers
+train-family:
+	@echo "Training family classifiers..."
+	docker compose --profile training run --rm trainer python -m src.ml.train_family --all-models
+	@echo "Family training complete!"
 
 # Clean everything
 clean:
