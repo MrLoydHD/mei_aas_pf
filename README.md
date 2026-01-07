@@ -169,8 +169,8 @@ The project uses multiple datasets located in the `data/raw/` folder:
 
 **Sources:**
 - DDNS providers: [alexandrosmagos/dyn-dns-list](https://github.com/alexandrosmagos/dyn-dns-list)
-- Binary DGAs: [https://www.kaggle.com/datasets/omurcantatar/dga-data-sets?select=legit_websites.csv](...)
-- Family DGAs: [https://github.com/chrmor/DGA_domains_dataset](...)
+- Binary DGAs: [https://www.kaggle.com/datasets/omurcantatar/dga-data-sets?select=legit_websites.csv](https://www.kaggle.com/datasets/omurcantatar/dga-data-sets?select=legit_websites.csv)
+- Family DGAs: [https://github.com/chrmor/DGA_domains_dataset](https://github.com/chrmor/DGA_domains_dataset)
 
 ## Usage
 
