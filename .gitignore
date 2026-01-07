@@ -219,7 +219,7 @@ yarn-error.log*
 *.swo
 
 # Project specific
-models/
+# models/
 archive/
 *.db
 
