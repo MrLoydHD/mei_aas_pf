@@ -28,55 +28,7 @@ The system detects domains generated algorithmically by botnets and command-and-
 
 ## Architecture
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                   Chrome Extension                           │
-│  - Real-time URL monitoring                                 │
-│  - Visual warnings for DGA domains                          │
-│  - Statistics tracking                                      │
-└──────────────────────────┬──────────────────────────────────┘
-                           │ HTTP/REST
-                           ▼
-┌─────────────────────────────────────────────────────────────┐
-│                   React Dashboard                            │
-│  - Detection statistics & charts                            │
-│  - Domain scanner interface                                 │
-│  - Model performance metrics                                │
-└──────────────────────────┬──────────────────────────────────┘
-                           │
-                           ▼
-┌─────────────────────────────────────────────────────────────┐
-│                   FastAPI Backend                            │
-│  - /predict - Single domain classification                  │
-│  - /predict/batch - Batch classification                    │
-│  - /predict/family - Family classification                  │
-│  - /metrics - Prometheus metrics                            │
-└────────────┬─────────────────────────────────┬──────────────┘
-             │                                 │
-             ▼                                 ▼
-┌────────────────────────────┐   ┌────────────────────────────┐
-│     Binary Detection       │   │   Family Classification    │
-│  ┌────────┐ ┌────────┐    │   │  ┌────────┐ ┌────────┐    │
-│  │   RF   │ │  LSTM  │    │   │  │   RF   │ │  LSTM  │    │
-│  └────────┘ └────────┘    │   │  └────────┘ └────────┘    │
-│  ┌────────┐ ┌────────┐    │   │  ┌────────┐ ┌────────┐    │
-│  │ XGBoost│ │   GB   │    │   │  │ XGBoost│ │   GB   │    │
-│  └────────┘ └────────┘    │   │  └────────┘ └────────┘    │
-│  ┌────────┐ ┌────────┐    │   │  ┌────────┐ ┌────────┐    │
-│  │Transf. │ │DistilB │    │   │  │Transf. │ │DistilB │    │
-│  └────────┘ └────────┘    │   │  └────────┘ └────────┘    │
-└────────────────────────────┘   └────────────────────────────┘
-             │                                 │
-             └─────────────┬───────────────────┘
-                           ▼
-┌─────────────────────────────────────────────────────────────┐
-│                   Monitoring Stack                           │
-│  ┌─────────────┐        ┌─────────────┐                     │
-│  │ Prometheus  │───────>│   Grafana   │                     │
-│  │   :9090     │        │   :3001     │                     │
-│  └─────────────┘        └─────────────┘                     │
-└─────────────────────────────────────────────────────────────┘
-```
+![arquitecture](./archive/architecture.png)
 
 ## Prerequisites
 
@@ -217,6 +169,8 @@ The project uses multiple datasets located in the `data/raw/` folder:
 
 **Sources:**
 - DDNS providers: [alexandrosmagos/dyn-dns-list](https://github.com/alexandrosmagos/dyn-dns-list)
+- Binary DGAs: [https://www.kaggle.com/datasets/omurcantatar/dga-data-sets?select=legit_websites.csv](...)
+- Family DGAs: [https://github.com/chrmor/DGA_domains_dataset](...)
 
 ## Usage
 
