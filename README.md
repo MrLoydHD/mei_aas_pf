@@ -419,17 +419,6 @@ mei_aas_pf/
 └── README.md
 ```
 
-## Results
-
-Performance metrics from training on the full dataset:
-
-| Model | Accuracy | Precision | Recall | F1-Score | ROC-AUC |
-|-------|----------|-----------|--------|----------|---------|
-| Random Forest | 89.34% | 92.91% | 85.18% | 88.88% | 95.89% |
-| CNN-LSTM | **95.88%** | **96.20%** | **95.53%** | **95.86%** | **99.27%** |
-
-The CNN-LSTM model outperforms Random Forest across all metrics, achieving nearly 96% accuracy and 99% ROC-AUC.
-
 ## Security Considerations
 
 - This tool is for **educational and defensive purposes only**
