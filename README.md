@@ -28,7 +28,7 @@ The system detects domains generated algorithmically by botnets and command-and-
 
 ## Architecture
 
-![arquitecture](./archive/architecture.png)
+![arquitecture](documentation/architecture.png)
 
 ## Prerequisites
 
